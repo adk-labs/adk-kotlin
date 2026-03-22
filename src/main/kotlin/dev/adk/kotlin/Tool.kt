@@ -54,6 +54,62 @@ interface Tool {
     suspend fun execute(call: ToolCall, context: ToolContext): ToolOutput
 }
 
+abstract class BaseAuthenticatedTool(
+    private val name: String,
+    private val description: String,
+    val authConfig: AuthConfig? = null,
+    private val responseForAuthRequired: String = "Pending User Authorization.",
+    private val isLongRunning: Boolean = false,
+    private val requiresConfirmation: Boolean = false,
+    private val confirmationHint: String = "",
+    private val customMetadata: Map<String, Any?> = emptyMap(),
+) : Tool {
+    protected open val inputSchema: String? = null
+    protected open val jsonSchema: ToolSchema? = null
+    protected open val parameters: List<ToolParameter> = emptyList()
+
+    final override val definition: ToolDefinition by lazy {
+        ToolDefinition(
+            name = name,
+            description = description,
+            inputSchema = inputSchema,
+            jsonSchema = jsonSchema,
+            parameters = parameters,
+            isLongRunning = isLongRunning,
+            requiresConfirmation = requiresConfirmation,
+            confirmationHint = confirmationHint,
+            customMetadata = customMetadata,
+        )
+    }
+
+    final override suspend fun execute(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolOutput {
+        val credential =
+            authConfig?.let { config ->
+                runCatching { context.loadCredential(config) }.getOrNull() ?: context.getAuthResponse(config)
+            }
+
+        if (authConfig != null && credential == null) {
+            context.requestCredential(authConfig)
+            return ToolOutput(responseForAuthRequired)
+        }
+
+        return executeAuthenticated(
+            call = call,
+            context = context,
+            credential = credential,
+        )
+    }
+
+    protected abstract suspend fun executeAuthenticated(
+        call: ToolCall,
+        context: ToolContext,
+        credential: AuthCredential?,
+    ): ToolOutput
+}
+
 typealias Context = ToolContext
 
 class ToolContext internal constructor(
@@ -201,6 +257,36 @@ private class LambdaTool(
     override suspend fun execute(call: ToolCall, context: ToolContext): ToolOutput = context.block(call)
 }
 
+private class LambdaAuthenticatedTool(
+    name: String,
+    description: String,
+    authConfig: AuthConfig? = null,
+    responseForAuthRequired: String = "Pending User Authorization.",
+    override val inputSchema: String? = null,
+    override val jsonSchema: ToolSchema? = null,
+    override val parameters: List<ToolParameter> = emptyList(),
+    isLongRunning: Boolean = false,
+    requiresConfirmation: Boolean = false,
+    confirmationHint: String = "",
+    customMetadata: Map<String, Any?> = emptyMap(),
+    private val block: suspend ToolContext.(ToolCall, AuthCredential?) -> ToolOutput,
+) : BaseAuthenticatedTool(
+        name = name,
+        description = description,
+        authConfig = authConfig,
+        responseForAuthRequired = responseForAuthRequired,
+        isLongRunning = isLongRunning,
+        requiresConfirmation = requiresConfirmation,
+        confirmationHint = confirmationHint,
+        customMetadata = customMetadata,
+    ) {
+    override suspend fun executeAuthenticated(
+        call: ToolCall,
+        context: ToolContext,
+        credential: AuthCredential?,
+    ): ToolOutput = context.block(call, credential)
+}
+
 class AgentTool(
     val agent: LlmAgent,
     val skipSummarization: Boolean = false,
@@ -250,6 +336,35 @@ fun tool(
             confirmationHint = confirmationHint,
             customMetadata = customMetadata,
         ),
+        block = block,
+    )
+
+fun authenticatedTool(
+    name: String,
+    description: String,
+    authConfig: AuthConfig? = null,
+    responseForAuthRequired: String = "Pending User Authorization.",
+    inputSchema: String? = null,
+    jsonSchema: ToolSchema? = null,
+    parameters: List<ToolParameter> = emptyList(),
+    isLongRunning: Boolean = false,
+    requiresConfirmation: Boolean = false,
+    confirmationHint: String = "",
+    customMetadata: Map<String, Any?> = emptyMap(),
+    block: suspend ToolContext.(ToolCall, AuthCredential?) -> ToolOutput,
+): Tool =
+    LambdaAuthenticatedTool(
+        name = name,
+        description = description,
+        authConfig = authConfig,
+        responseForAuthRequired = responseForAuthRequired,
+        inputSchema = inputSchema,
+        jsonSchema = jsonSchema,
+        parameters = parameters,
+        isLongRunning = isLongRunning,
+        requiresConfirmation = requiresConfirmation,
+        confirmationHint = confirmationHint,
+        customMetadata = customMetadata,
         block = block,
     )
 

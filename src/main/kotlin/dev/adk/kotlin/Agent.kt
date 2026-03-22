@@ -138,6 +138,7 @@ data class LlmAgent(
     val outputKey: String? = null,
     val planner: BasePlanner? = null,
     val tools: List<Tool> = emptyList(),
+    val toolsets: List<BaseToolset> = emptyList(),
     val subAgents: List<LlmAgent> = emptyList(),
     val maxIterations: Int = 8,
     val loopMaxIterations: Int? = null,
@@ -178,6 +179,7 @@ data class LlmAgent(
                 require(outputKey == null) { "SequentialAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "SequentialAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "SequentialAgent '$name' cannot declare tools." }
+                require(toolsets.isEmpty()) { "SequentialAgent '$name' cannot declare toolsets." }
             }
 
             AgentExecutionKind.LOOP -> {
@@ -198,6 +200,7 @@ data class LlmAgent(
                 require(outputKey == null) { "LoopAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "LoopAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "LoopAgent '$name' cannot declare tools." }
+                require(toolsets.isEmpty()) { "LoopAgent '$name' cannot declare toolsets." }
             }
 
             AgentExecutionKind.PARALLEL -> {
@@ -218,6 +221,7 @@ data class LlmAgent(
                 require(outputKey == null) { "ParallelAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "ParallelAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "ParallelAgent '$name' cannot declare tools." }
+                require(toolsets.isEmpty()) { "ParallelAgent '$name' cannot declare toolsets." }
             }
         }
     }

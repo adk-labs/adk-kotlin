@@ -152,6 +152,7 @@ class Runner(
 
     suspend fun close() {
         pluginManager.close()
+        closeToolsets(app.rootAgent)
     }
 
     private suspend fun runAgent(
@@ -364,6 +365,7 @@ class Runner(
 
         repeat(agent.maxIterations) {
             val workingSession = snapshotSession(baseSession, workingState, transcript, events)
+            val resolvedTools = resolveTools(agent, workingSession)
             val callbackContext = CallbackContext(invocationContext = invocationContext, agent = agent)
             val request =
                 PromptAssembler.createRequest(
@@ -371,6 +373,7 @@ class Runner(
                     agent = agent,
                     session = workingSession,
                     transcript = transcript.toList(),
+                    resolvedTools = resolvedTools,
                     artifactService = artifactService,
                     includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
                     includeExitLoopTool = allowExitLoop,
@@ -587,7 +590,7 @@ class Runner(
 
                     finalModelResponse.calls.forEach { call ->
                         val tool =
-                            agent.tools.find { it.definition.name == call.toolName }
+                            resolvedTools.find { it.definition.name == call.toolName }
                                 ?: error("Unknown tool requested: ${call.toolName}")
                         val callId = UUID.randomUUID().toString()
                         val confirmation =
@@ -907,8 +910,37 @@ class Runner(
             updatedAt = Instant.now(),
         )
 
+    private suspend fun resolveTools(
+        agent: LlmAgent,
+        session: AgentSession,
+    ): List<Tool> {
+        val resolved = mutableListOf<Tool>()
+        resolved += agent.tools
+
+        val readonlyContext =
+            ReadonlyContext(
+                appName = app.name,
+                agent = agent,
+                session = session,
+            )
+        agent.toolsets.forEach { toolset ->
+            resolved += toolset.getToolsWithPrefix(readonlyContext)
+        }
+
+        return resolved
+    }
+
+    private fun closeToolsets(agent: LlmAgent) {
+        agent.toolsets.forEach { toolset -> toolset.close() }
+        agent.subAgents.forEach(::closeToolsets)
+    }
+
     private fun shouldUseOutputSchemaWorkaround(agent: LlmAgent): Boolean {
-        if (agent.outputSchema == null || agent.tools.isEmpty()) {
+        if (agent.outputSchema == null) {
+            return false
+        }
+
+        if (agent.tools.isEmpty() && agent.toolsets.isEmpty()) {
             return false
         }
 

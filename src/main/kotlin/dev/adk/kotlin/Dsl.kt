@@ -76,6 +76,7 @@ class LlmAgentDsl internal constructor(
 
     private val instructionLines = mutableListOf<String>()
     private val tools = mutableListOf<Tool>()
+    private val toolsets = mutableListOf<BaseToolset>()
     private val subAgents = mutableListOf<LlmAgent>()
     private var instructionBypassesStateInjection: Boolean = false
     private var staticInstructionText: String? = null
@@ -119,6 +120,14 @@ class LlmAgentDsl internal constructor(
 
     fun tools(vararg tools: Tool) {
         this.tools += tools
+    }
+
+    fun toolset(toolset: BaseToolset) {
+        toolsets += toolset
+    }
+
+    fun toolsets(vararg toolsets: BaseToolset) {
+        this.toolsets += toolsets
     }
 
     fun subAgent(name: String, block: LlmAgentDsl.() -> Unit) {
@@ -165,6 +174,7 @@ class LlmAgentDsl internal constructor(
             outputKey = outputKey?.trim()?.takeIf { it.isNotEmpty() },
             planner = planner,
             tools = tools.toList(),
+            toolsets = toolsets.toList(),
             subAgents = subAgents.toList(),
             maxIterations = maxIterations,
             disallowTransferToParent = disallowTransferToParent,

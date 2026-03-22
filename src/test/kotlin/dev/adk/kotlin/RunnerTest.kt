@@ -1356,6 +1356,149 @@ class RunnerTest {
         }
 
     @Test
+    fun `authenticated tools request credentials until auth is available`() =
+        runTest {
+            var modelCalls = 0
+
+            val authConfig =
+                AuthConfig(
+                    authScheme = "api_key",
+                    credentialKey = "weather_api",
+                )
+
+            val weatherTool =
+                authenticatedTool(
+                    name = "lookup_weather",
+                    description = "Calls an authenticated weather API.",
+                    authConfig = authConfig,
+                    responseForAuthRequired = "Pending User Authorization.",
+                ) { _, credential ->
+                    remember("last_api_key", credential?.apiKey)
+                    ToolOutput("authorized:${credential?.apiKey}")
+                }
+
+            val app =
+                adkApp("auth-tool-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("lookup_weather"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("Pending User Authorization.", request.session.transcript.last().text)
+                            ModelResponse.Final("Waiting for auth.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Check the weather.",
+                )
+
+            assertEquals("Waiting for auth.", result.finalMessage)
+            assertEquals("weather_api", result.events[1].actions.requestedAuthConfigs.values.single().credentialKey)
+        }
+
+    @Test
+    fun `authenticated tools can run with loaded credentials and toolsets expand into requests`() =
+        runTest {
+            var modelCalls = 0
+
+            val authConfig =
+                AuthConfig(
+                    authScheme = "api_key",
+                    credentialKey = "weather_api",
+                )
+            val credentialService = InMemoryCredentialService()
+            credentialService.saveCredential(
+                authConfig = authConfig,
+                appName = "toolset-app",
+                userId = "user-1",
+                credential = AuthCredential(apiKey = "secret-weather-key"),
+            )
+
+            val authenticatedWeatherTool =
+                authenticatedTool(
+                    name = "lookup_weather",
+                    description = "Calls an authenticated weather API.",
+                    authConfig = authConfig,
+                ) { _, credential ->
+                    remember("toolset_api_key", credential?.apiKey)
+                    ToolOutput("authorized:${credential?.apiKey}")
+                }
+
+            val demoToolset =
+                object : BaseToolset(toolNamePrefix = "demo") {
+                    override suspend fun getTools(readonlyContext: ReadonlyContext?): List<Tool> =
+                        listOf(authenticatedWeatherTool)
+                }
+
+            val app =
+                adkApp("toolset-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        toolset(demoToolset)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertTrue(request.availableTools.any { tool -> tool.name == "demo_lookup_weather" })
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("demo_lookup_weather"),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            assertEquals("secret-weather-key", request.session.state["toolset_api_key"])
+                            ModelResponse.Final("Toolset weather lookup completed.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    credentialService = credentialService,
+                )
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Check the weather.",
+                )
+
+            assertEquals("Toolset weather lookup completed.", result.finalMessage)
+            assertEquals("authorized:secret-weather-key", result.events[1].content?.text)
+        }
+
+    @Test
     fun `runner executes parallel agents in isolated branches and merges by completion order`() =
         runTest {
             val callCounts = mutableMapOf<String, Int>()

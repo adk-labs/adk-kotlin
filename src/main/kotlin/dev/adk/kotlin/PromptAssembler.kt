@@ -17,6 +17,7 @@ internal object PromptAssembler {
         agent: LlmAgent,
         session: AgentSession,
         transcript: List<Message>,
+        resolvedTools: List<Tool> = agent.tools,
         artifactService: ArtifactService? = null,
         includeOutputSchemaWorkaround: Boolean = false,
         includeExitLoopTool: Boolean = false,
@@ -88,9 +89,10 @@ internal object PromptAssembler {
                 },
             availableTools =
                 buildAvailableTools(
-                    agent = agent,
+                    toolDefinitions = resolvedTools.map { tool -> tool.definition },
                     transferTargets = transferTargets,
                     includeOutputSchemaWorkaround = includeOutputSchemaWorkaround,
+                    outputSchema = agent.outputSchema,
                     includeExitLoopTool = includeExitLoopTool,
                 ),
             config = requestConfig,
@@ -287,15 +289,16 @@ internal object PromptAssembler {
     }
 
     private fun buildAvailableTools(
-        agent: LlmAgent,
+        toolDefinitions: List<ToolDefinition>,
         transferTargets: List<LlmAgent>,
         includeOutputSchemaWorkaround: Boolean,
+        outputSchema: OutputSchema?,
         includeExitLoopTool: Boolean,
     ): List<ToolDefinition> {
-        val tools = agent.tools.map { it.definition }.toMutableList()
+        val tools = toolDefinitions.toMutableList()
 
         if (includeOutputSchemaWorkaround) {
-            val outputSchema = requireNotNull(agent.outputSchema) { "outputSchema must be set when workaround is enabled." }
+            val requiredOutputSchema = requireNotNull(outputSchema) { "outputSchema must be set when workaround is enabled." }
             tools +=
                 ToolDefinition(
                     name = Runner.SET_MODEL_RESPONSE_TOOL,
@@ -303,8 +306,8 @@ internal object PromptAssembler {
                         "Set your final response using the required output schema. " +
                             "After using any other tools needed to complete the task, always call " +
                             "set_model_response with your final answer in the specified schema format.",
-                    jsonSchema = outputSchema.toToolSchema(),
-                    parameters = outputSchema.fields,
+                    jsonSchema = requiredOutputSchema.toToolSchema(),
+                    parameters = requiredOutputSchema.fields,
                 )
         }
 

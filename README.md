@@ -47,6 +47,8 @@ but the API shape here follows Kotlin conventions first:
   credential-aware `ToolContext` helpers.
 - Official-style `ToolContext.requestConfirmation(...)` so tools can ask for
   approval directly during execution.
+- `BaseAuthenticatedTool` and `BaseToolset` foundations for auth-aware tools
+  and grouped tool modules.
 
 ## Current Scope
 
@@ -72,6 +74,8 @@ The repository currently contains the first runnable foundation:
 - Runner-level tool confirmation handling with approval metadata on events.
 - Runtime auth request emission plus in-memory credential loading hooks.
 - Tool-driven confirmation requests propagated on emitted tool events.
+- Toolset expansion and authenticated-tool execution on top of the auth
+  runtime.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -218,6 +222,24 @@ val publishTool: Tool =
             payload = mapOf("audience" to "all"),
         )
         ToolOutput("Publish confirmation requested.")
+    }
+
+val mapsTool: Tool =
+    authenticatedTool(
+        name = "call_maps_api",
+        description = "Calls an authenticated maps API.",
+        authConfig =
+            AuthConfig(
+                authScheme = "api_key",
+                credentialKey = "maps_api",
+            ),
+    ) { _, credential ->
+        ToolOutput("authorized:${credential?.apiKey}")
+    }
+
+val prefixedToolset =
+    object : BaseToolset(toolNamePrefix = "maps") {
+        override suspend fun getTools(readonlyContext: ReadonlyContext?): List<Tool> = listOf(mapsTool)
     }
 ```
 

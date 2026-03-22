@@ -186,6 +186,18 @@ class AgentDslTest {
     fun `stores planner configuration on llm agents`() {
         val planner = builtInPlanner { thinkingBudget = 128 }
         val codeExecutor = unsafeLocalCodeExecutor(timeoutSeconds = 5)
+        val sampleToolset =
+            object : BaseToolset(toolNamePrefix = "sample") {
+                override suspend fun getTools(readonlyContext: ReadonlyContext?): List<Tool> =
+                    listOf(
+                        tool(
+                            name = "lookup",
+                            description = "Lookup something.",
+                        ) {
+                            ToolOutput("done")
+                        },
+                    )
+            }
 
         val app =
             adkApp("planner-app") {
@@ -198,6 +210,7 @@ class AgentDslTest {
                         string("topic", description = "Topic to analyze")
                     }
                     outputKey = "planner_output"
+                    toolset(sampleToolset)
                 }
             }
 
@@ -207,5 +220,6 @@ class AgentDslTest {
         assertEquals(ToolSchemaType.OBJECT, app.rootAgent.inputSchema?.type)
         assertEquals(listOf("topic"), app.rootAgent.inputSchema?.required)
         assertEquals("planner_output", app.rootAgent.outputKey)
+        assertEquals(sampleToolset, app.rootAgent.toolsets.single())
     }
 }
