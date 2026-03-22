@@ -25,6 +25,8 @@ but the API shape here follows Kotlin conventions first:
   in-memory artifact service wired by default in `Runner`.
 - Model-layer foundation with `BaseLlm`, `LlmRegistry`, and explicit
   `generateContentConfig` propagation on requests.
+- First-class `Event` and `EventActions` emission with state, artifact,
+  transfer, and completion deltas.
 
 ## Current Scope
 
@@ -37,6 +39,7 @@ The repository currently contains the first runnable foundation:
 - A default in-memory `ArtifactService` for official-style instruction
   interpolation.
 - A provider-ready model foundation instead of a single raw callback surface.
+- First-class runtime events persisted on sessions and returned from runs.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -96,6 +99,16 @@ val runner = Runner(
     app = app,
     model = RegistryBackedLanguageModel(),
 )
+
+val result = runner.run(
+    userId = "user-1",
+    sessionId = "session-1",
+    input = "Plan a trip to Seoul.",
+)
+
+result.events.forEach { event ->
+    println("${event.author}: ${event.content?.text} -> ${event.actions}")
+}
 ```
 
 Artifact-backed instructions use the same interpolation path:
@@ -157,6 +170,7 @@ Structured output now follows the official split path as well:
 ## Near-Term Roadmap
 
 - Introduce provider modules instead of baking model transports into core.
-- Add richer tool schemas, streaming, and persistent session backends.
-- Align more of the official runtime surface, including streaming and richer
-  tool/runtime schemas.
+- Add plugins and streaming on top of the new event surface.
+- Add richer tool schemas and persistent session backends.
+- Align more of the official runtime surface, including broader tool/runtime
+  schemas and storage modules.

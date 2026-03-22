@@ -1,6 +1,7 @@
 package dev.adk.kotlin
 
 import java.time.Instant
+import java.util.UUID
 
 data class ToolExecution(
     val agentName: String,
@@ -14,6 +15,7 @@ data class RunResult(
     val finalAgentName: String,
     val structuredResponse: Any? = null,
     val toolExecutions: List<ToolExecution>,
+    val events: List<Event>,
 )
 
 class Runner(
@@ -36,17 +38,27 @@ class Runner(
         require(input.isNotBlank()) { "input cannot be blank." }
 
         val rootAgent = app.rootAgent
+        val invocationId = UUID.randomUUID().toString()
         val baseSession = sessionStore.getOrCreate(app.name, userId, sessionId)
         val workingState = baseSession.state.toMutableMap()
         val toolExecutions = mutableListOf<ToolExecution>()
+        val events = baseSession.events.toMutableList()
         var transcript: List<Message> = baseSession.transcript + UserMessage(input)
         var activeAgent = rootAgent
+        events +=
+            Event(
+                invocationId = invocationId,
+                author = "user",
+                content = transcript.last(),
+                branch = app.branchOf(rootAgent),
+            )
 
         repeat(rootAgent.maxIterations) {
             val workingSession =
                 baseSession.copy(
                     state = workingState.toMap(),
                     transcript = transcript,
+                    events = events.toList(),
                     updatedAt = Instant.now(),
                 )
 
@@ -73,11 +85,26 @@ class Runner(
                         response.message.ifBlank {
                             structuredResponse?.toString().orEmpty()
                         }
-                    transcript = transcript + ModelMessage(finalMessage)
+                    val finalEvent =
+                        Event(
+                            invocationId = invocationId,
+                            author = activeAgent.name,
+                            content = ModelMessage(finalMessage),
+                            actions =
+                                EventActions(
+                                    endOfAgent = true,
+                                    agentState = workingState.toMap(),
+                                ),
+                            branch = app.branchOf(activeAgent),
+                            turnComplete = true,
+                        )
+                    transcript = transcript + requireNotNull(finalEvent.content)
+                    events += finalEvent
                     val savedSession =
                         workingSession.copy(
                             state = workingState.toMap(),
                             transcript = transcript,
+                            events = events.toList(),
                             updatedAt = Instant.now(),
                         )
                     sessionStore.save(app.name, savedSession)
@@ -87,6 +114,7 @@ class Runner(
                         finalAgentName = activeAgent.name,
                         structuredResponse = structuredResponse,
                         toolExecutions = toolExecutions.toList(),
+                        events = events.toList(),
                     )
                 }
 
@@ -115,12 +143,23 @@ class Runner(
                                 call = transferCall,
                                 output = output,
                             )
-                        transcript =
-                            transcript +
-                                ToolMessage(
-                                    toolName = TRANSFER_TO_AGENT_TOOL,
-                                    text = output.content,
-                                )
+                        val transferEvent =
+                            Event(
+                                invocationId = invocationId,
+                                author = activeAgent.name,
+                                content =
+                                    ToolMessage(
+                                        toolName = TRANSFER_TO_AGENT_TOOL,
+                                        text = output.content,
+                                    ),
+                                actions =
+                                    EventActions(
+                                        transferToAgent = targetAgentName,
+                                    ),
+                                branch = app.branchOf(activeAgent),
+                            )
+                        transcript = transcript + requireNotNull(transferEvent.content)
+                        events += transferEvent
                         activeAgent = nextAgent
                         return@repeat
                     }
@@ -143,12 +182,27 @@ class Runner(
                                 call = setModelResponseCall,
                                 output = output,
                             )
-                        transcript = transcript + ModelMessage(finalMessage)
+                        val finalEvent =
+                            Event(
+                                invocationId = invocationId,
+                                author = activeAgent.name,
+                                content = ModelMessage(finalMessage),
+                                actions =
+                                    EventActions(
+                                        endOfAgent = true,
+                                        agentState = workingState.toMap(),
+                                    ),
+                                branch = app.branchOf(activeAgent),
+                                turnComplete = true,
+                            )
+                        transcript = transcript + requireNotNull(finalEvent.content)
+                        events += finalEvent
 
                         val savedSession =
                             workingSession.copy(
                                 state = workingState.toMap(),
                                 transcript = transcript,
+                                events = events.toList(),
                                 updatedAt = Instant.now(),
                             )
                         sessionStore.save(app.name, savedSession)
@@ -158,6 +212,7 @@ class Runner(
                             finalAgentName = activeAgent.name,
                             structuredResponse = structuredResponse,
                             toolExecutions = toolExecutions.toList(),
+                            events = events.toList(),
                         )
                     }
 
@@ -174,7 +229,20 @@ class Runner(
                                 workingState = workingState,
                                 artifactService = artifactService,
                             )
+                        val stateBeforeTool = workingState.toMap()
                         val output = tool.execute(call, context)
+                        val toolEvent =
+                            Event(
+                                invocationId = invocationId,
+                                author = activeAgent.name,
+                                content = ToolMessage(toolName = call.toolName, text = output.content),
+                                actions =
+                                    EventActions(
+                                        stateDelta = computeStateDelta(stateBeforeTool, workingState),
+                                        artifactDelta = context.recordedArtifactDelta(),
+                                    ),
+                                branch = app.branchOf(activeAgent),
+                            )
 
                         toolExecutions +=
                             ToolExecution(
@@ -182,7 +250,8 @@ class Runner(
                                 call = call,
                                 output = output,
                             )
-                        transcript = transcript + ToolMessage(toolName = call.toolName, text = output.content)
+                        transcript = transcript + requireNotNull(toolEvent.content)
+                        events += toolEvent
                     }
                 }
             }
@@ -223,4 +292,20 @@ class Runner(
             },
         )
     }
+
+    private fun computeStateDelta(
+        before: Map<String, String>,
+        after: Map<String, String>,
+    ): Map<String, String?> =
+        (before.keys + after.keys)
+            .sorted()
+            .mapNotNull { key ->
+                val beforeValue = before[key]
+                val afterValue = after[key]
+                if (beforeValue == afterValue) {
+                    null
+                } else {
+                    key to afterValue
+                }
+            }.toMap(linkedMapOf())
 }

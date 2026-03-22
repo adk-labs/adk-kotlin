@@ -81,10 +81,18 @@ class RunnerTest {
             assertEquals(1, result.toolExecutions.size)
             assertEquals("planner", result.toolExecutions.single().agentName)
             assertEquals("Seoul", result.session.state["last_city"])
+            assertEquals(3, result.events.size)
+            assertEquals("user", result.events[0].author)
+            assertEquals("planner", result.events[1].author)
+            assertEquals("planner", result.events[2].author)
+            assertEquals("Seoul", result.events[1].actions.stateDelta["last_city"])
+            assertEquals(true, result.events[2].actions.endOfAgent)
+            assertTrue(result.events[2].isFinalResponse())
 
             val stored = sessionStore.get("trip-planner", "user-1", "session-1")
             assertNotNull(stored)
             assertEquals(3, stored.transcript.size)
+            assertEquals(result.events, stored.events)
             assertTrue(stored.transcript[0] is UserMessage)
             assertTrue(stored.transcript[1] is ToolMessage)
             assertTrue(stored.transcript[2] is ModelMessage)
@@ -153,6 +161,15 @@ class RunnerTest {
             assertEquals("researcher", result.finalAgentName)
             assertEquals(Runner.TRANSFER_TO_AGENT_TOOL, result.toolExecutions.single().call.toolName)
             assertEquals("coordinator", result.toolExecutions.single().agentName)
+            assertEquals(3, result.events.size)
+            assertEquals(result.events[0].invocationId, result.events[1].invocationId)
+            assertEquals(result.events[1].invocationId, result.events[2].invocationId)
+            assertEquals("coordinator", result.events[1].author)
+            assertEquals("researcher", result.events[1].actions.transferToAgent)
+            assertEquals("coordinator", result.events[1].branch)
+            assertEquals("researcher", result.events[2].author)
+            assertEquals("coordinator.researcher", result.events[2].branch)
+            assertEquals(true, result.events[2].actions.endOfAgent)
         }
 
     @Test
@@ -510,6 +527,73 @@ class RunnerTest {
             assertEquals(
                 Artifact("This is my artifact content.", version = 0),
                 runner.artifactService.loadArtifact("knowledge-app", "user-1", "session-1", "knowledge.txt"),
+            )
+        }
+
+    @Test
+    fun `runner emits artifact deltas in tool events`() =
+        runTest {
+            var modelCalls = 0
+
+            val persistArtifactTool =
+                tool(
+                    name = "persist_knowledge",
+                    description = "Persist reusable context.",
+                ) {
+                    remember("last_saved", "knowledge.txt")
+                    saveArtifact(
+                        filename = "knowledge.txt",
+                        artifact = Artifact("Stored context"),
+                    )
+                    ToolOutput("saved")
+                }
+
+            val app =
+                adkApp("knowledge-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(persistArtifactTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("persist_knowledge"),
+                                ),
+                            )
+
+                        2 -> ModelResponse.Final("Stored the context.")
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Store this context.",
+                )
+
+            assertEquals("Stored the context.", result.finalMessage)
+            assertEquals(3, result.events.size)
+            assertEquals(
+                mapOf("last_saved" to "knowledge.txt"),
+                result.events[1].actions.stateDelta,
+            )
+            assertEquals(
+                mapOf("knowledge.txt" to 0),
+                result.events[1].actions.artifactDelta,
+            )
+            assertEquals(
+                mapOf("last_saved" to "knowledge.txt"),
+                result.events.last().actions.agentState,
             )
         }
 }

@@ -34,6 +34,8 @@ class ToolContext internal constructor(
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
 ) {
+    private val artifactDelta = linkedMapOf<String, Int>()
+
     val state: MutableMap<String, String>
         get() = workingState
 
@@ -52,14 +54,18 @@ class ToolContext internal constructor(
     suspend fun saveArtifact(
         filename: String,
         artifact: Artifact,
-    ): Int =
-        artifactService.saveArtifact(
+    ): Int {
+        val version =
+            artifactService.saveArtifact(
             appName = appName,
             userId = session.userId,
             sessionId = session.id,
             filename = filename,
             artifact = artifact,
         )
+        artifactDelta[filename] = version
+        return version
+    }
 
     suspend fun loadArtifact(
         filename: String,
@@ -79,6 +85,8 @@ class ToolContext internal constructor(
             userId = session.userId,
             sessionId = session.id,
         )
+
+    internal fun recordedArtifactDelta(): Map<String, Int> = artifactDelta.toMap()
 }
 
 private class LambdaTool(

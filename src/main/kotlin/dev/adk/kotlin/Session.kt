@@ -7,5 +7,6 @@ data class AgentSession(
     val userId: String,
     val state: Map<String, String> = emptyMap(),
     val transcript: List<Message> = emptyList(),
+    val events: List<Event> = emptyList(),
     val updatedAt: Instant = Instant.now(),
 )

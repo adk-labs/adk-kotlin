@@ -16,6 +16,10 @@ data class AdkApp(
 
     internal fun parentOf(agent: LlmAgent): LlmAgent? = parentOf(rootAgent, agent.name, parent = null)
 
+    internal fun branchOf(agent: LlmAgent): String = requireNotNull(branchOf(rootAgent, agent.name, emptyList())) {
+        "Unknown agent '${agent.name}' in app '${name}'."
+    }
+
     internal fun transferTargetsOf(agent: LlmAgent): List<LlmAgent> {
         val targets = mutableListOf<LlmAgent>()
         targets += agent.subAgents
@@ -75,6 +79,26 @@ data class AdkApp(
 
         current.subAgents.forEach { child ->
             val found = parentOf(child, targetName, current)
+            if (found != null) {
+                return found
+            }
+        }
+
+        return null
+    }
+
+    private fun branchOf(
+        current: LlmAgent,
+        targetName: String,
+        path: List<String>,
+    ): String? {
+        val nextPath = path + current.name
+        if (current.name == targetName) {
+            return nextPath.joinToString(".")
+        }
+
+        current.subAgents.forEach { child ->
+            val found = branchOf(child, targetName, nextPath)
             if (found != null) {
                 return found
             }
