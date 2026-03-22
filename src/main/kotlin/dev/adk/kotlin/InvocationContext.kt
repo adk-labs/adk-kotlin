@@ -6,10 +6,15 @@ class InvocationContext internal constructor(
     val invocationId: String,
     val rootAgent: LlmAgent,
     val artifactService: ArtifactService,
+    private val eventSink: suspend (Event) -> Unit,
     private val sessionProvider: () -> AgentSession,
 ) {
     val session: AgentSession
         get() = sessionProvider()
+
+    internal suspend fun publishEvent(event: Event) {
+        eventSink(event)
+    }
 }
 
 class CallbackContext internal constructor(

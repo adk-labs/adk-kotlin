@@ -1,6 +1,7 @@
 package dev.adk.kotlin
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -2389,5 +2390,112 @@ class RunnerTest {
                 mapOf("user:shared.txt" to 0),
                 result.events.first().actions.artifactDelta,
             )
+        }
+
+    @Test
+    fun `runner streams invocation events through callback overload`() =
+        runTest {
+            var modelCalls = 0
+            val streamedEvents = mutableListOf<Event>()
+
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) {
+                    ToolOutput("Seoul is sunny")
+                }
+
+            val app =
+                adkApp("streaming-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "lookup_weather",
+                                        arguments = mapOf("city" to "Seoul"),
+                                    ),
+                                ),
+                            )
+
+                        2 -> ModelResponse.Final("Seoul is sunny today.")
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "What is the weather in Seoul?",
+                    onEvent = { streamedEvents += it },
+                )
+
+            assertEquals("Seoul is sunny today.", result.finalMessage)
+            assertEquals(listOf("user", "planner", "planner"), streamedEvents.map { it.author })
+            assertEquals(
+                listOf(
+                    "What is the weather in Seoul?",
+                    "Seoul is sunny",
+                    "Seoul is sunny today.",
+                ),
+                streamedEvents.map { it.content?.text },
+            )
+            assertEquals(streamedEvents, result.events)
+            assertTrue(streamedEvents.last().turnComplete)
+        }
+
+    @Test
+    fun `runner exposes flow based event stream`() =
+        runTest {
+            val sessionStore = InMemorySessionStore()
+
+            val app =
+                adkApp("streaming-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertEquals("Stream this run.", request.conversation.single().text)
+                    ModelResponse.Final("Flow final response.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    sessionStore = sessionStore,
+                )
+
+            val events =
+                runner
+                    .stream(
+                        userId = "user-1",
+                        sessionId = "session-1",
+                        input = "Stream this run.",
+                    ).toList()
+            val savedSession = sessionStore.getOrCreate("streaming-app", "user-1", "session-1")
+
+            assertEquals(listOf("user", "planner"), events.map { it.author })
+            assertEquals(
+                listOf("Stream this run.", "Flow final response."),
+                events.map { it.content?.text },
+            )
+            assertTrue(events.last().turnComplete)
+            assertEquals(events, savedSession.events)
         }
 }

@@ -3,6 +3,8 @@ package dev.adk.kotlin
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import java.time.Instant
 import java.util.UUID
 
@@ -61,14 +63,42 @@ class Runner(
     ): RunResult =
         run(
             userId = userId,
+            input = input,
+            sessionId = sessionId,
+            onEvent = {},
+        )
+
+    suspend fun run(
+        userId: String,
+        input: String,
+        sessionId: String? = null,
+        onEvent: suspend (Event) -> Unit,
+    ): RunResult =
+        run(
+            userId = userId,
             userMessage = UserMessage(input),
             sessionId = sessionId,
+            onEvent = onEvent,
         )
 
     suspend fun run(
         userId: String,
         userMessage: UserMessage,
         sessionId: String? = null,
+    ): RunResult {
+        return run(
+            userId = userId,
+            userMessage = userMessage,
+            sessionId = sessionId,
+            onEvent = {},
+        )
+    }
+
+    suspend fun run(
+        userId: String,
+        userMessage: UserMessage,
+        sessionId: String? = null,
+        onEvent: suspend (Event) -> Unit,
     ): RunResult {
         require(userId.isNotBlank()) { "userId cannot be blank." }
         require(userMessage.text.isNotBlank() || userMessage.attachments.isNotEmpty()) {
@@ -89,6 +119,7 @@ class Runner(
                 invocationId = invocationId,
                 rootAgent = rootAgent,
                 artifactService = artifactService,
+                eventSink = onEvent,
             ) {
                 baseSession.copy(
                     state = workingState.toMap(),
@@ -167,6 +198,31 @@ class Runner(
         pluginManager.runAfterRunCallback(invocationContext, runResult)
         return runResult
     }
+
+    fun stream(
+        userId: String,
+        input: String,
+        sessionId: String? = null,
+    ): Flow<Event> =
+        stream(
+            userId = userId,
+            userMessage = UserMessage(input),
+            sessionId = sessionId,
+        )
+
+    fun stream(
+        userId: String,
+        userMessage: UserMessage,
+        sessionId: String? = null,
+    ): Flow<Event> =
+        channelFlow {
+            run(
+                userId = userId,
+                userMessage = userMessage,
+                sessionId = sessionId,
+                onEvent = { send(it) },
+            )
+        }
 
     suspend fun close() {
         pluginManager.close()
@@ -882,6 +938,7 @@ class Runner(
         val emittedEvent = pluginManager.runOnEventCallback(invocationContext, event) ?: event
         emittedEvent.content?.let(transcript::add)
         events += emittedEvent
+        invocationContext.publishEvent(emittedEvent)
         return emittedEvent
     }
 

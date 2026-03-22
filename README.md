@@ -319,6 +319,28 @@ result.events.forEach { event ->
 }
 ```
 
+For live UIs and CLIs, the same runner can stream invocation events as they happen:
+
+```kotlin
+val streamedResult =
+    runner.run(
+        userId = "user-1",
+        sessionId = "session-1",
+        input = "Plan a trip to Seoul.",
+    ) { event ->
+        println("live ${event.author}: ${event.content?.text}")
+    }
+
+runner
+    .stream(
+        userId = "user-1",
+        sessionId = "session-2",
+        input = "Plan another trip to Busan.",
+    ).collect { event ->
+        println("flow ${event.author}: ${event.content?.text}")
+    }
+```
+
 Artifact-backed instructions use the same interpolation path:
 
 ```kotlin
