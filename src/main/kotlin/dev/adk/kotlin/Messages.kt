@@ -53,3 +53,10 @@ data class ToolMessage(
 ) : Message {
     override val role: MessageRole = MessageRole.TOOL
 }
+
+internal fun Message.withAttachments(attachments: List<MessageAttachment>): Message =
+    when (this) {
+        is UserMessage -> copy(attachments = attachments)
+        is ModelMessage -> copy(attachments = attachments)
+        is ToolMessage -> copy(attachments = attachments)
+    }

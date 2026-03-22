@@ -2498,4 +2498,105 @@ class RunnerTest {
             assertTrue(events.last().turnComplete)
             assertEquals(events, savedSession.events)
         }
+
+    @Test
+    fun `multimodal tool results plugin merges tool attachments into the next model request`() =
+        runTest {
+            var modelCalls = 0
+
+            val firstImageTool =
+                tool(
+                    name = "fetch_first_image",
+                    description = "Fetch the first image.",
+                ) {
+                    ToolOutput(
+                        content = "First image ready.",
+                        attachments =
+                            listOf(
+                                MessageAttachment(
+                                    filename = "first.png",
+                                    content = "first-image",
+                                    mimeType = "image/png",
+                                ),
+                            ),
+                    )
+                }
+
+            val secondImageTool =
+                tool(
+                    name = "fetch_second_image",
+                    description = "Fetch the second image.",
+                ) {
+                    ToolOutput(
+                        content = "Second image ready.",
+                        attachments =
+                            listOf(
+                                MessageAttachment(
+                                    filename = "second.png",
+                                    content = "second-image",
+                                    mimeType = "image/png",
+                                ),
+                            ),
+                    )
+                }
+
+            val app =
+                adkApp("multimodal-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(firstImageTool)
+                        tool(secondImageTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("fetch_first_image"),
+                                    ToolCall("fetch_second_image"),
+                                ),
+                            )
+
+                        2 -> {
+                            val lastMessage = request.conversation.last()
+                            assertEquals("Second image ready.", lastMessage.text)
+                            assertEquals(
+                                listOf("first.png", "second.png"),
+                                lastMessage.attachments.map { it.filename }.sorted(),
+                            )
+                            ModelResponse.Final("Both images received.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins = listOf(multimodalToolResultsPlugin()),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Describe both images.",
+                )
+
+            assertEquals("Both images received.", result.finalMessage)
+            assertEquals(
+                listOf("first.png"),
+                (result.events[1].content as ToolMessage).attachments.map { it.filename },
+            )
+            assertEquals(
+                listOf("second.png"),
+                (result.events[2].content as ToolMessage).attachments.map { it.filename },
+            )
+        }
 }

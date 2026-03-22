@@ -60,6 +60,9 @@ but the API shape here follows Kotlin conventions first:
   official-style upload-to-artifact flows.
 - Multimodal-style artifact propagation through `Artifact.mimeType`,
   attachment-bearing messages, and attachment-bearing tool outputs.
+- Live event streaming via `run(..., onEvent = ...)` and `stream(...)`.
+- Packaged `MultimodalToolResultsPlugin` for official-style tool-to-model
+  multimodal chaining.
 
 ## Current Scope
 
@@ -429,6 +432,40 @@ Structured output now follows the official split path as well:
 - If an agent combines tools with `outputSchema` on a model path that cannot
   support both together, Kotlin falls back to the internal
   `set_model_response` tool and matching instruction text.
+
+Multimodal tool results can be chained into the next model request through the
+official-style plugin surface:
+
+```kotlin
+val imageTool =
+    tool(
+        name = "get_image",
+        description = "Return an image for the current task.",
+    ) {
+        ToolOutput(
+            content = "Image loaded.",
+            attachments =
+                listOf(
+                    MessageAttachment(
+                        filename = "cat.png",
+                        content = "<binary-or-reference>",
+                        mimeType = "image/png",
+                    ),
+                ),
+        )
+    }
+
+val runner =
+    Runner(
+        app = app,
+        model = model,
+        plugins = listOf(MultimodalToolResultsPlugin()),
+    )
+```
+
+With that plugin enabled, attachment-bearing tool outputs are collected across
+the current invocation and merged into the final conversation message sent to
+the next model call.
 
 ## Near-Term Roadmap
 

@@ -6,6 +6,7 @@ class InvocationContext internal constructor(
     val invocationId: String,
     val rootAgent: LlmAgent,
     val artifactService: ArtifactService,
+    private val temporaryStorage: MutableMap<String, Any?>,
     private val eventSink: suspend (Event) -> Unit,
     private val sessionProvider: () -> AgentSession,
 ) {
@@ -15,6 +16,24 @@ class InvocationContext internal constructor(
     internal suspend fun publishEvent(event: Event) {
         eventSink(event)
     }
+
+    internal fun putTemporaryValue(
+        key: String,
+        value: Any?,
+    ) {
+        if (value == null) {
+            temporaryStorage.remove(key)
+        } else {
+            temporaryStorage[key] = value
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    internal fun <T> getTemporaryValue(key: String): T? = temporaryStorage[key] as? T
+
+    internal fun removeTemporaryValue(key: String): Any? = temporaryStorage.remove(key)
+
+    internal fun temporaryStorage(): MutableMap<String, Any?> = temporaryStorage
 }
 
 class CallbackContext internal constructor(

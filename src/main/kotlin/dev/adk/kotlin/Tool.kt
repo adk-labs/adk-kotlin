@@ -127,6 +127,7 @@ class ToolContext internal constructor(
     val session: AgentSession,
     val invocationId: String? = null,
     private val workingState: MutableMap<String, String>,
+    private val temporaryStorage: MutableMap<String, Any?>,
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
     private val credentialService: CredentialService? = null,
@@ -152,6 +153,22 @@ class ToolContext internal constructor(
     fun recall(key: String): String? = workingState[key]
 
     fun snapshot(): Map<String, String> = workingState.toMap()
+
+    internal fun putTemporaryValue(
+        key: String,
+        value: Any?,
+    ) {
+        if (value == null) {
+            temporaryStorage.remove(key)
+        } else {
+            temporaryStorage[key] = value
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    internal fun <T> getTemporaryValue(key: String): T? = temporaryStorage[key] as? T
+
+    internal fun removeTemporaryValue(key: String): Any? = temporaryStorage.remove(key)
 
     suspend fun saveArtifact(
         filename: String,

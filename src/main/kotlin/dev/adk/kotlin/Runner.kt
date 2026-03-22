@@ -109,6 +109,7 @@ class Runner(
         val invocationId = UUID.randomUUID().toString()
         val baseSession = sessionStore.getOrCreate(app.name, userId, sessionId)
         val workingState = baseSession.state.toMutableMap()
+        val temporaryStorage = linkedMapOf<String, Any?>()
         val toolExecutions = mutableListOf<ToolExecution>()
         val events = baseSession.events.toMutableList()
         val transcript = baseSession.transcript.toMutableList()
@@ -119,6 +120,7 @@ class Runner(
                 invocationId = invocationId,
                 rootAgent = rootAgent,
                 artifactService = artifactService,
+                temporaryStorage = temporaryStorage,
                 eventSink = onEvent,
             ) {
                 baseSession.copy(
@@ -456,7 +458,7 @@ class Runner(
                 preprocessLlmRequest(
                     agent = agent,
                     session = workingSession,
-                    invocationId = invocationContext.invocationId,
+                    invocationContext = invocationContext,
                     workingState = workingState,
                     resolvedTools = resolvedTools,
                     llmRequest = request,
@@ -700,6 +702,7 @@ class Runner(
                                 session = workingSession,
                                 invocationId = invocationContext.invocationId,
                                 workingState = workingState,
+                                temporaryStorage = invocationContext.temporaryStorage(),
                                 functionCallId = callId,
                                 toolConfirmation = confirmation,
                             )
@@ -989,7 +992,7 @@ class Runner(
     private suspend fun preprocessLlmRequest(
         agent: LlmAgent,
         session: AgentSession,
-        invocationId: String,
+        invocationContext: InvocationContext,
         workingState: MutableMap<String, String>,
         resolvedTools: List<Tool>,
         llmRequest: LlmRequest,
@@ -998,8 +1001,9 @@ class Runner(
             createToolContext(
                 agent = agent,
                 session = session,
-                invocationId = invocationId,
+                invocationId = invocationContext.invocationId,
                 workingState = workingState.toMutableMap(),
+                temporaryStorage = invocationContext.temporaryStorage(),
             )
         var currentRequest = llmRequest
 
@@ -1018,6 +1022,7 @@ class Runner(
         session: AgentSession,
         invocationId: String,
         workingState: MutableMap<String, String>,
+        temporaryStorage: MutableMap<String, Any?>,
         functionCallId: String? = null,
         toolConfirmation: ToolConfirmation? = null,
     ): ToolContext =
@@ -1027,6 +1032,7 @@ class Runner(
             session = session,
             invocationId = invocationId,
             workingState = workingState,
+            temporaryStorage = temporaryStorage,
             artifactService = artifactService,
             memoryService = memoryService,
             credentialService = credentialService,
