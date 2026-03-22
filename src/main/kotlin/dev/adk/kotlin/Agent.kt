@@ -2,6 +2,11 @@ package dev.adk.kotlin
 
 private val AGENT_NAME_PATTERN = Regex("^_?[a-zA-Z0-9]*([. _-][a-zA-Z0-9]+)*$")
 
+enum class AgentExecutionKind {
+    LLM,
+    SEQUENTIAL,
+}
+
 data class AdkApp(
     val name: String,
     val rootAgent: LlmAgent,
@@ -34,7 +39,7 @@ data class AdkApp(
             targets += parent.subAgents.filterNot { it.name == agent.name }
         }
 
-        return targets
+        return targets.filter { it.executionKind == AgentExecutionKind.LLM }
     }
 
     private fun validateAgentTree(agent: LlmAgent) {
@@ -108,9 +113,11 @@ data class AdkApp(
     }
 }
 
+typealias SequentialAgent = LlmAgent
+
 data class LlmAgent(
     val name: String,
-    val model: String,
+    val model: String = "",
     val description: String = "",
     val instruction: InstructionTemplate? = null,
     val staticInstruction: String? = null,
@@ -121,6 +128,7 @@ data class LlmAgent(
     val maxIterations: Int = 8,
     val disallowTransferToParent: Boolean = false,
     val disallowTransferToPeers: Boolean = false,
+    val executionKind: AgentExecutionKind = AgentExecutionKind.LLM,
 ) {
     init {
         require(name.isNotBlank()) { "Agent name cannot be blank." }
@@ -128,10 +136,25 @@ data class LlmAgent(
             "Agent name '$name' does not match the official ADK identifier pattern."
         }
         require(name != "user") { "Agent name cannot be 'user'; reserved for end-user input." }
-        require(model.isNotBlank()) { "Agent model cannot be blank." }
         require(maxIterations > 0) { "maxIterations must be positive." }
         require(subAgents.map { it.name }.toSet().size == subAgents.size) {
             "Sub-agents must have unique names under parent agent '$name'."
+        }
+
+        when (executionKind) {
+            AgentExecutionKind.LLM -> {
+                require(model.isNotBlank()) { "Agent model cannot be blank." }
+            }
+
+            AgentExecutionKind.SEQUENTIAL -> {
+                require(model.isBlank()) { "SequentialAgent '$name' must not declare a model." }
+                require(subAgents.isNotEmpty()) { "SequentialAgent '$name' must declare at least one sub-agent." }
+                require(instruction == null) { "SequentialAgent '$name' cannot declare instruction." }
+                require(staticInstruction == null) { "SequentialAgent '$name' cannot declare staticInstruction." }
+                require(generateContentConfig == null) { "SequentialAgent '$name' cannot declare generateContentConfig." }
+                require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
+                require(tools.isEmpty()) { "SequentialAgent '$name' cannot declare tools." }
+            }
         }
     }
 }

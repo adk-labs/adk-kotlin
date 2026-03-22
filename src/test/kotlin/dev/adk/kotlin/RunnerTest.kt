@@ -729,4 +729,69 @@ class RunnerTest {
             assertEquals("plugin supplied weather", result.events[1].content?.text)
             assertEquals("Done.", result.finalMessage)
         }
+
+    @Test
+    fun `runner executes sequential agents in order`() =
+        runTest {
+            var modelCalls = 0
+
+            val researcher =
+                agent("researcher") {
+                    model = "gemini-2.5-flash"
+                    instruction("Research the request.")
+                }
+
+            val reviewer =
+                agent("reviewer") {
+                    model = "gemini-2.5-pro"
+                    instruction("Review the result.")
+                }
+
+            val app =
+                adkApp("research-app") {
+                    rootAgent(
+                        sequentialAgent("pipeline") {
+                            description = "Runs specialists in order."
+                            subAgents(researcher, reviewer)
+                        },
+                    )
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertEquals("researcher", request.agent.name)
+                            assertEquals(1, request.conversation.size)
+                            ModelResponse.Final("Research draft.")
+                        }
+
+                        2 -> {
+                            assertEquals("reviewer", request.agent.name)
+                            assertEquals("Research draft.", request.session.transcript.last().text)
+                            ModelResponse.Final("Reviewed final answer.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Research and review this itinerary.",
+                )
+
+            assertEquals("Reviewed final answer.", result.finalMessage)
+            assertEquals("reviewer", result.finalAgentName)
+            assertEquals(3, result.session.transcript.size)
+            assertEquals(
+                listOf("user", "researcher", "reviewer"),
+                result.events.map { it.author },
+            )
+        }
 }

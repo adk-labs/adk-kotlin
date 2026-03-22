@@ -33,6 +33,7 @@ but the API shape here follows Kotlin conventions first:
   user-defined tools.
 - File-backed session/artifact backends and a first-class memory service
   surface.
+- Sequential shell agents for official-style multi-agent orchestration.
 
 ## Current Scope
 
@@ -49,6 +50,7 @@ The repository currently contains the first runnable foundation:
 - A plugin manager and global plugin callbacks integrated into `Runner`.
 - Structured tool schema support for built-in and user-defined tools.
 - Persistent file-backed session/artifact services and in-memory memory search.
+- Sequential shell-agent orchestration on top of the same runner/event model.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -90,6 +92,12 @@ val app: App = app("travel_assistant") {
         }
     )
 }
+
+val pipeline: SequentialAgent =
+    sequentialAgent("pipeline") {
+        description = "Runs specialists in order."
+        subAgents(greeter, app.rootAgent)
+    }
 ```
 
 Provider modules can now plug in through `BaseLlm` and `LlmRegistry`:

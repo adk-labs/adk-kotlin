@@ -106,4 +106,34 @@ class AgentDslTest {
         assertEquals(listOf("lookup_weather"), officialApp.rootAgent.tools.map { it.definition.name })
         assertEquals(listOf("greeter"), officialApp.rootAgent.subAgents.map { it.name })
     }
+
+    @Test
+    fun `builds sequential agents with official naming`() {
+        val researcher =
+            agent("researcher") {
+                model = "gemini-2.5-flash"
+                instruction("Research the request.")
+            }
+
+        val reviewer =
+            agent("reviewer") {
+                model = "gemini-2.5-pro"
+                instruction("Review the result.")
+            }
+
+        val pipeline: SequentialAgent =
+            sequentialAgent("pipeline") {
+                description = "Runs specialists in sequence."
+                subAgents(researcher, reviewer)
+            }
+
+        val app =
+            app("travel_assistant") {
+                rootAgent(pipeline)
+            }
+
+        assertEquals(AgentExecutionKind.SEQUENTIAL, app.rootAgent.executionKind)
+        assertEquals("", app.rootAgent.model)
+        assertEquals(listOf("researcher", "reviewer"), app.rootAgent.subAgents.map { it.name })
+    }
 }

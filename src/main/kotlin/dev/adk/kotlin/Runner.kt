@@ -18,6 +18,12 @@ data class RunResult(
     val events: List<Event>,
 )
 
+private data class ExecutionOutcome(
+    val finalEvent: Event,
+    val finalAgentName: String,
+    val structuredResponse: Any? = null,
+)
+
 class Runner(
     private val app: AdkApp,
     private val model: LanguageModel,
@@ -47,8 +53,7 @@ class Runner(
         val workingState = baseSession.state.toMutableMap()
         val toolExecutions = mutableListOf<ToolExecution>()
         val events = baseSession.events.toMutableList()
-        var transcript: List<Message> = baseSession.transcript
-        var activeAgent = rootAgent
+        val transcript = baseSession.transcript.toMutableList()
         val invocationContext =
             InvocationContext(
                 app = app,
@@ -58,7 +63,7 @@ class Runner(
             ) {
                 baseSession.copy(
                     state = workingState.toMap(),
-                    transcript = transcript,
+                    transcript = transcript.toList(),
                     events = events.toList(),
                     updatedAt = Instant.now(),
                 )
@@ -77,9 +82,8 @@ class Runner(
                     content = incomingUserMessage,
                     branch = app.branchOf(rootAgent),
                 ),
-        ) {
-            transcript = transcript + it
-        }
+            transcript = transcript,
+        )
 
         pluginManager.runBeforeRunCallback(invocationContext)?.let { earlyEvent ->
             val emittedEvent =
@@ -87,14 +91,13 @@ class Runner(
                     invocationContext = invocationContext,
                     events = events,
                     event = earlyEvent,
-                ) {
-                    transcript = transcript + it
-                }
+                    transcript = transcript,
+                )
             val earlyResult =
                 saveAndCreateRunResult(
                     session = invocationContext.session,
                     workingState = workingState,
-                    transcript = transcript,
+                    transcript = transcript.toList(),
                     events = events,
                     finalEvent = emittedEvent,
                     structuredResponse = null,
@@ -105,23 +108,114 @@ class Runner(
             return earlyResult
         }
 
-        repeat(rootAgent.maxIterations) {
-            val workingSession =
-                baseSession.copy(
-                    state = workingState.toMap(),
+        val outcome =
+            runAgent(
+                agent = rootAgent,
+                baseSession = baseSession,
+                workingState = workingState,
+                transcript = transcript,
+                events = events,
+                invocationContext = invocationContext,
+                toolExecutions = toolExecutions,
+            )
+
+        val runResult =
+            saveAndCreateRunResult(
+                session = baseSession,
+                workingState = workingState,
+                transcript = transcript.toList(),
+                events = events,
+                finalEvent = outcome.finalEvent,
+                structuredResponse = outcome.structuredResponse,
+                toolExecutions = toolExecutions,
+                fallbackAgentName = outcome.finalAgentName,
+            )
+        pluginManager.runAfterRunCallback(invocationContext, runResult)
+        return runResult
+    }
+
+    suspend fun close() {
+        pluginManager.close()
+    }
+
+    private suspend fun runAgent(
+        agent: LlmAgent,
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        toolExecutions: MutableList<ToolExecution>,
+    ): ExecutionOutcome =
+        when (agent.executionKind) {
+            AgentExecutionKind.LLM ->
+                runLlmAgent(
+                    agent = agent,
+                    baseSession = baseSession,
+                    workingState = workingState,
                     transcript = transcript,
-                    events = events.toList(),
-                    updatedAt = Instant.now(),
+                    events = events,
+                    invocationContext = invocationContext,
+                    toolExecutions = toolExecutions,
                 )
-            val callbackContext = CallbackContext(invocationContext = invocationContext, agent = activeAgent)
+
+            AgentExecutionKind.SEQUENTIAL ->
+                runSequentialAgent(
+                    agent = agent,
+                    baseSession = baseSession,
+                    workingState = workingState,
+                    transcript = transcript,
+                    events = events,
+                    invocationContext = invocationContext,
+                    toolExecutions = toolExecutions,
+                )
+        }
+
+    private suspend fun runSequentialAgent(
+        agent: LlmAgent,
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        toolExecutions: MutableList<ToolExecution>,
+    ): ExecutionOutcome {
+        var lastOutcome: ExecutionOutcome? = null
+        agent.subAgents.forEach { subAgent ->
+            lastOutcome =
+                runAgent(
+                    agent = subAgent,
+                    baseSession = baseSession,
+                    workingState = workingState,
+                    transcript = transcript,
+                    events = events,
+                    invocationContext = invocationContext,
+                    toolExecutions = toolExecutions,
+                )
+        }
+        return requireNotNull(lastOutcome) { "SequentialAgent '${agent.name}' must produce at least one outcome." }
+    }
+
+    private suspend fun runLlmAgent(
+        agent: LlmAgent,
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        toolExecutions: MutableList<ToolExecution>,
+    ): ExecutionOutcome {
+        repeat(agent.maxIterations) {
+            val workingSession = snapshotSession(baseSession, workingState, transcript, events)
+            val callbackContext = CallbackContext(invocationContext = invocationContext, agent = agent)
             val request =
                 PromptAssembler.createRequest(
                     app = app,
-                    agent = activeAgent,
+                    agent = agent,
                     session = workingSession,
-                    transcript = transcript,
+                    transcript = transcript.toList(),
                     artifactService = artifactService,
-                    includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(activeAgent),
+                    includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
                 )
 
             val response =
@@ -137,7 +231,7 @@ class Runner(
                 is ModelResponse.Final -> {
                     val structuredResponse =
                         validateStructuredResponse(
-                            agent = activeAgent,
+                            agent = agent,
                             structuredResponse = finalModelResponse.structuredResponse,
                         )
                     val finalMessage =
@@ -150,33 +244,24 @@ class Runner(
                             events = events,
                             event =
                                 Event(
-                                    invocationId = invocationId,
-                                    author = activeAgent.name,
+                                    invocationId = invocationContext.invocationId,
+                                    author = agent.name,
                                     content = ModelMessage(finalMessage),
                                     actions =
                                         EventActions(
                                             endOfAgent = true,
                                             agentState = workingState.toMap(),
                                         ),
-                                    branch = app.branchOf(activeAgent),
+                                    branch = app.branchOf(agent),
                                     turnComplete = true,
                                 ),
-                        ) {
-                            transcript = transcript + it
-                        }
-                    val runResult =
-                        saveAndCreateRunResult(
-                            session = workingSession,
-                            workingState = workingState,
                             transcript = transcript,
-                            events = events,
-                            finalEvent = emittedEvent,
-                            structuredResponse = structuredResponse,
-                            toolExecutions = toolExecutions,
-                            fallbackAgentName = activeAgent.name,
                         )
-                    pluginManager.runAfterRunCallback(invocationContext, runResult)
-                    return runResult
+                    return ExecutionOutcome(
+                        finalEvent = emittedEvent,
+                        finalAgentName = agent.name,
+                        structuredResponse = structuredResponse,
+                    )
                 }
 
                 is ModelResponse.ToolCalls -> {
@@ -193,14 +278,14 @@ class Runner(
                         val targetAgentName = transferCall.requireArgument("agent_name")
                         val nextAgent =
                             app
-                                .transferTargetsOf(activeAgent)
+                                .transferTargetsOf(agent)
                                 .firstOrNull { it.name == targetAgentName }
                                 ?: error("Unknown transfer target: $targetAgentName")
 
                         val output = ToolOutput("Transferred to agent $targetAgentName.")
                         toolExecutions +=
                             ToolExecution(
-                                agentName = activeAgent.name,
+                                agentName = agent.name,
                                 call = transferCall,
                                 output = output,
                             )
@@ -209,8 +294,8 @@ class Runner(
                             events = events,
                             event =
                                 Event(
-                                    invocationId = invocationId,
-                                    author = activeAgent.name,
+                                    invocationId = invocationContext.invocationId,
+                                    author = agent.name,
                                     content =
                                         ToolMessage(
                                             toolName = TRANSFER_TO_AGENT_TOOL,
@@ -220,13 +305,19 @@ class Runner(
                                         EventActions(
                                             transferToAgent = targetAgentName,
                                         ),
-                                    branch = app.branchOf(activeAgent),
+                                    branch = app.branchOf(agent),
                                 ),
-                        ) {
-                            transcript = transcript + it
-                        }
-                        activeAgent = nextAgent
-                        return@repeat
+                            transcript = transcript,
+                        )
+                        return runAgent(
+                            agent = nextAgent,
+                            baseSession = baseSession,
+                            workingState = workingState,
+                            transcript = transcript,
+                            events = events,
+                            invocationContext = invocationContext,
+                            toolExecutions = toolExecutions,
+                        )
                     }
 
                     val setModelResponseCall = finalModelResponse.calls.singleOrNull { it.toolName == SET_MODEL_RESPONSE_TOOL }
@@ -235,7 +326,7 @@ class Runner(
                             "set_model_response must be the only tool call in a turn."
                         }
                         val outputSchema =
-                            activeAgent.outputSchema
+                            agent.outputSchema
                                 ?: error("set_model_response is only valid when outputSchema is configured.")
                         val structuredResponse = outputSchema.validate(setModelResponseCall.arguments)
                         val finalMessage = structuredResponse.toString()
@@ -243,7 +334,7 @@ class Runner(
 
                         toolExecutions +=
                             ToolExecution(
-                                agentName = activeAgent.name,
+                                agentName = agent.name,
                                 call = setModelResponseCall,
                                 output = output,
                             )
@@ -253,45 +344,36 @@ class Runner(
                                 events = events,
                                 event =
                                     Event(
-                                        invocationId = invocationId,
-                                        author = activeAgent.name,
+                                        invocationId = invocationContext.invocationId,
+                                        author = agent.name,
                                         content = ModelMessage(finalMessage),
                                         actions =
                                             EventActions(
                                                 endOfAgent = true,
                                                 agentState = workingState.toMap(),
                                             ),
-                                        branch = app.branchOf(activeAgent),
+                                        branch = app.branchOf(agent),
                                         turnComplete = true,
                                     ),
-                            ) {
-                                transcript = transcript + it
-                            }
-
-                        val runResult =
-                            saveAndCreateRunResult(
-                                session = workingSession,
-                                workingState = workingState,
                                 transcript = transcript,
-                                events = events,
-                                finalEvent = emittedEvent,
-                                structuredResponse = structuredResponse,
-                                toolExecutions = toolExecutions,
-                                fallbackAgentName = activeAgent.name,
                             )
-                        pluginManager.runAfterRunCallback(invocationContext, runResult)
-                        return runResult
+
+                        return ExecutionOutcome(
+                            finalEvent = emittedEvent,
+                            finalAgentName = agent.name,
+                            structuredResponse = structuredResponse,
+                        )
                     }
 
                     finalModelResponse.calls.forEach { call ->
                         val tool =
-                            activeAgent.tools.find { it.definition.name == call.toolName }
+                            agent.tools.find { it.definition.name == call.toolName }
                                 ?: error("Unknown tool requested: ${call.toolName}")
 
                         val context =
                             ToolContext(
                                 appName = app.name,
-                                agent = activeAgent,
+                                agent = agent,
                                 session = workingSession,
                                 workingState = workingState,
                                 artifactService = artifactService,
@@ -318,23 +400,22 @@ class Runner(
                                 events = events,
                                 event =
                                     Event(
-                                        invocationId = invocationId,
-                                        author = activeAgent.name,
+                                        invocationId = invocationContext.invocationId,
+                                        author = agent.name,
                                         content = ToolMessage(toolName = call.toolName, text = finalToolOutput.content),
                                         actions =
                                             EventActions(
                                                 stateDelta = computeStateDelta(stateBeforeTool, workingState),
                                                 artifactDelta = context.recordedArtifactDelta(),
                                             ),
-                                        branch = app.branchOf(activeAgent),
+                                        branch = app.branchOf(agent),
                                     ),
-                            ) {
-                                transcript = transcript + it
-                            }
+                                transcript = transcript,
+                            )
 
                         toolExecutions +=
                             ToolExecution(
-                                agentName = activeAgent.name,
+                                agentName = agent.name,
                                 call = call,
                                 output =
                                     ToolOutput(
@@ -347,21 +428,17 @@ class Runner(
             }
         }
 
-        error("Agent ${rootAgent.name} exceeded maxIterations=${rootAgent.maxIterations}.")
-    }
-
-    suspend fun close() {
-        pluginManager.close()
+        error("Agent ${agent.name} exceeded maxIterations=${agent.maxIterations}.")
     }
 
     private suspend fun emitEvent(
         invocationContext: InvocationContext,
         events: MutableList<Event>,
         event: Event,
-        onContent: (Message) -> Unit,
+        transcript: MutableList<Message>,
     ): Event {
         val emittedEvent = pluginManager.runOnEventCallback(invocationContext, event) ?: event
-        emittedEvent.content?.let(onContent)
+        emittedEvent.content?.let(transcript::add)
         events += emittedEvent
         return emittedEvent
     }
@@ -396,6 +473,19 @@ class Runner(
             events = events.toList(),
         )
     }
+
+    private fun snapshotSession(
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+    ): AgentSession =
+        baseSession.copy(
+            state = workingState.toMap(),
+            transcript = transcript.toList(),
+            events = events.toList(),
+            updatedAt = Instant.now(),
+        )
 
     private fun shouldUseOutputSchemaWorkaround(agent: LlmAgent): Boolean {
         if (agent.outputSchema == null || agent.tools.isEmpty()) {

@@ -18,6 +18,9 @@ fun agent(name: String, block: LlmAgentDsl.() -> Unit): Agent =
 fun llmAgent(name: String, block: LlmAgentDsl.() -> Unit): LlmAgent =
     agent(name, block)
 
+fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit): SequentialAgent =
+    SequentialAgentDsl(name).apply(block).build()
+
 @AdkDsl
 class AppDsl internal constructor(
     private val name: String,
@@ -107,6 +110,10 @@ class LlmAgentDsl internal constructor(
         subAgents += agents
     }
 
+    fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.sequentialAgent(name, block)
+    }
+
     internal fun build(): LlmAgent =
         LlmAgent(
             name = name,
@@ -130,5 +137,35 @@ class LlmAgentDsl internal constructor(
             maxIterations = maxIterations,
             disallowTransferToParent = disallowTransferToParent,
             disallowTransferToPeers = disallowTransferToPeers,
+            executionKind = AgentExecutionKind.LLM,
+        )
+}
+
+@AdkDsl
+class SequentialAgentDsl internal constructor(
+    private val name: String,
+) {
+    var description: String = ""
+
+    private val subAgents = mutableListOf<LlmAgent>()
+
+    fun subAgent(name: String, block: LlmAgentDsl.() -> Unit) {
+        subAgents += llmAgent(name, block)
+    }
+
+    fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.sequentialAgent(name, block)
+    }
+
+    fun subAgents(vararg agents: LlmAgent) {
+        subAgents += agents
+    }
+
+    internal fun build(): SequentialAgent =
+        LlmAgent(
+            name = name,
+            description = description.trim(),
+            subAgents = subAgents.toList(),
+            executionKind = AgentExecutionKind.SEQUENTIAL,
         )
 }
