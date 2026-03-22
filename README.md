@@ -56,6 +56,8 @@ but the API shape here follows Kotlin conventions first:
 - Packaged `ContextFilterPlugin` and `DebugLoggingPlugin` for official-style
   prompt trimming and local debug trace capture.
 - Packaged `LoggingPlugin` for console-oriented lifecycle tracing.
+- Attachment-aware `UserMessage` input plus `SaveFilesAsArtifactsPlugin` for
+  official-style upload-to-artifact flows.
 
 ## Current Scope
 
@@ -89,6 +91,8 @@ The repository currently contains the first runnable foundation:
   `GlobalInstructionPlugin`.
 - Packaged context filtering and debug-log file emission plugins.
 - Packaged console logging for runner, model, tool, and event callbacks.
+- Attachment-aware user input and packaged save-files-to-artifacts upload
+  handling.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -237,6 +241,7 @@ val runtimePlugins =
         contextFilterPlugin(numInvocationsToKeep = 2),
         DebugLoggingPlugin(),
         LoggingPlugin(),
+        saveFilesAsArtifactsPlugin(),
     )
 
 val publishTool: Tool =

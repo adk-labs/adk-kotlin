@@ -58,9 +58,22 @@ class Runner(
         userId: String,
         input: String,
         sessionId: String? = null,
+    ): RunResult =
+        run(
+            userId = userId,
+            userMessage = UserMessage(input),
+            sessionId = sessionId,
+        )
+
+    suspend fun run(
+        userId: String,
+        userMessage: UserMessage,
+        sessionId: String? = null,
     ): RunResult {
         require(userId.isNotBlank()) { "userId cannot be blank." }
-        require(input.isNotBlank()) { "input cannot be blank." }
+        require(userMessage.text.isNotBlank() || userMessage.attachments.isNotEmpty()) {
+            "userMessage must contain text or attachments."
+        }
 
         val rootAgent = app.rootAgent
         val invocationId = UUID.randomUUID().toString()
@@ -86,8 +99,8 @@ class Runner(
             }
 
         val incomingUserMessage =
-            pluginManager.runOnUserMessageCallback(invocationContext, UserMessage(input))
-                ?: UserMessage(input)
+            pluginManager.runOnUserMessageCallback(invocationContext, userMessage)
+                ?: userMessage
         emitEvent(
             invocationContext = invocationContext,
             events = events,
@@ -96,6 +109,10 @@ class Runner(
                     invocationId = invocationId,
                     author = "user",
                     content = incomingUserMessage,
+                    actions =
+                        EventActions(
+                            artifactDelta = incomingUserMessage.artifactDelta,
+                        ),
                     branch = app.branchOf(rootAgent),
                 ),
             transcript = transcript,

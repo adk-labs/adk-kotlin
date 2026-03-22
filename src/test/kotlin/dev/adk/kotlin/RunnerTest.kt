@@ -2265,4 +2265,119 @@ class RunnerTest {
             assertTrue(lines.any { it.contains("INVOCATION COMPLETED") })
             assertTrue(lines.any { it.contains("lookup_weather") })
         }
+
+    @Test
+    fun `save files as artifacts plugin persists session uploads and rewrites user text`() =
+        runTest {
+            val artifactService = InMemoryArtifactService()
+
+            val app =
+                adkApp("upload-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertTrue(request.conversation.single().text.contains("[Uploaded Artifact: \"notes.txt\"]"))
+                    ModelResponse.Final("Upload acknowledged.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    artifactService = artifactService,
+                    plugins =
+                        listOf(
+                            saveFilesAsArtifactsPlugin(),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    userMessage =
+                        UserMessage(
+                            text = "Please review the upload.",
+                            attachments =
+                                listOf(
+                                    MessageAttachment(
+                                        filename = "notes.txt",
+                                        content = "Quarterly plan",
+                                    ),
+                                ),
+                        ),
+                )
+
+            assertEquals("Upload acknowledged.", result.finalMessage)
+            assertEquals(
+                "Quarterly plan",
+                artifactService.loadArtifact("upload-app", "user-1", "session-1", "notes.txt")?.content,
+            )
+            assertEquals(
+                mapOf("notes.txt" to 0),
+                result.events.first().actions.artifactDelta,
+            )
+        }
+
+    @Test
+    fun `save files as artifacts plugin supports user scoped persistence`() =
+        runTest {
+            val artifactService = InMemoryArtifactService()
+
+            val app =
+                adkApp("upload-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertTrue(request.conversation.single().text.contains("[Uploaded Artifact: \"shared.txt\"]"))
+                    ModelResponse.Final("User artifact saved.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    artifactService = artifactService,
+                    plugins =
+                        listOf(
+                            saveFilesAsArtifactsPlugin(),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    userMessage =
+                        UserMessage(
+                            text = "",
+                            attachments =
+                                listOf(
+                                    MessageAttachment(
+                                        filename = "shared.txt",
+                                        content = "Shared profile",
+                                        scope = AttachmentScope.USER,
+                                    ),
+                                ),
+                        ),
+                )
+
+            assertEquals("User artifact saved.", result.finalMessage)
+            assertEquals(
+                "Shared profile",
+                artifactService.loadArtifact("upload-app", "user-1", null, "user:shared.txt")?.content,
+            )
+            assertEquals(
+                mapOf("user:shared.txt" to 0),
+                result.events.first().actions.artifactDelta,
+            )
+        }
 }
