@@ -27,4 +27,7 @@ class CallbackContext internal constructor(
 
     val session: AgentSession
         get() = invocationContext.session
+
+    val branch: String
+        get() = invocationContext.app.branchOf(agent)
 }

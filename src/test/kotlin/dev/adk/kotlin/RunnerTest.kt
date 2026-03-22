@@ -2201,4 +2201,68 @@ class RunnerTest {
             assertTrue(debugLog.contains("Debug this run."))
             assertTrue(debugLog.contains("Debug final response."))
         }
+
+    @Test
+    fun `logging plugin records model and tool lifecycle lines`() =
+        runTest {
+            val lines = mutableListOf<String>()
+            var modelCalls = 0
+
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) {
+                    ToolOutput("Seoul is sunny")
+                }
+
+            val app =
+                adkApp("logging-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("lookup_weather"),
+                                ),
+                            )
+
+                        2 -> ModelResponse.Final("Logged final answer.")
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins =
+                        listOf(
+                            loggingPlugin(sink = lines::add),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Log this run.",
+                )
+
+            assertEquals("Logged final answer.", result.finalMessage)
+            assertTrue(lines.any { it.contains("USER MESSAGE RECEIVED") })
+            assertTrue(lines.any { it.contains("LLM REQUEST") })
+            assertTrue(lines.any { it.contains("TOOL STARTING") })
+            assertTrue(lines.any { it.contains("TOOL COMPLETED") })
+            assertTrue(lines.any { it.contains("INVOCATION COMPLETED") })
+            assertTrue(lines.any { it.contains("lookup_weather") })
+        }
 }

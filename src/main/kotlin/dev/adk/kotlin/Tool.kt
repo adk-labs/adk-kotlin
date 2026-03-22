@@ -129,7 +129,7 @@ class ToolContext internal constructor(
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
     private val credentialService: CredentialService? = null,
-    private val functionCallId: String? = null,
+    val functionCallId: String? = null,
     val toolConfirmation: ToolConfirmation? = null,
     private val agentToolExecutor: suspend (ToolContext, LlmAgent, Map<String, Any?>, Boolean, Boolean) -> ToolOutput,
 ) {

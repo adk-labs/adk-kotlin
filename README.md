@@ -55,6 +55,7 @@ but the API shape here follows Kotlin conventions first:
   before-model instruction prepending on immutable requests.
 - Packaged `ContextFilterPlugin` and `DebugLoggingPlugin` for official-style
   prompt trimming and local debug trace capture.
+- Packaged `LoggingPlugin` for console-oriented lifecycle tracing.
 
 ## Current Scope
 
@@ -87,6 +88,7 @@ The repository currently contains the first runnable foundation:
 - Plugin-level request rewriting before model execution, including a packaged
   `GlobalInstructionPlugin`.
 - Packaged context filtering and debug-log file emission plugins.
+- Packaged console logging for runner, model, tool, and event callbacks.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -234,6 +236,7 @@ val runtimePlugins =
         globalInstructionPlugin("Speak to {user:name} politely."),
         contextFilterPlugin(numInvocationsToKeep = 2),
         DebugLoggingPlugin(),
+        LoggingPlugin(),
     )
 
 val publishTool: Tool =
