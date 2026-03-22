@@ -67,6 +67,8 @@ but the API shape here follows Kotlin conventions first:
   based `main(args)` entrypoint.
 - Dev server foundation with `AdkWebServer`, session endpoints, JSON `/run`,
   and SSE `/run_sse`.
+- Recordings foundation with official-style `_adk_recordings_config` state and
+  `RecordingsPlugin`.
 
 ## Current Scope
 
@@ -518,6 +520,27 @@ println(server.baseUrl)
 The current foundation exposes app listing, session lifecycle routes, a JSON
 `POST /run`, and an SSE `POST /run_sse` endpoint on top of the same `Runner`
 semantics.
+
+Recording mode can now be enabled through session state in the same style:
+
+```kotlin
+val config =
+    RecordingsConfig(
+        testCasePath = "/tmp/adk-case",
+        userMessageIndex = 0,
+        streamingMode = "sse",
+    )
+
+val session =
+    AgentSession(
+        id = "session-1",
+        userId = "user-1",
+        state = mapOf(RECORDINGS_CONFIG_KEY to config.toStateValue()),
+    )
+```
+
+With `RecordingsPlugin()` installed, Kotlin persists invocation recordings and
+session snapshots as JSON files under the configured test-case directory.
 
 ## Near-Term Roadmap
 
