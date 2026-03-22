@@ -132,6 +132,7 @@ data class LlmAgent(
     val staticInstruction: String? = null,
     val generateContentConfig: GenerateContentConfig? = null,
     val includeContents: IncludeContents = IncludeContents.DEFAULT,
+    val codeExecutor: BaseCodeExecutor? = null,
     val inputSchema: ToolSchema? = null,
     val outputSchema: OutputSchema? = null,
     val outputKey: String? = null,
@@ -171,6 +172,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "SequentialAgent '$name' cannot declare includeContents."
                 }
+                require(codeExecutor == null) { "SequentialAgent '$name' cannot declare codeExecutor." }
                 require(inputSchema == null) { "SequentialAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "SequentialAgent '$name' cannot declare outputKey." }
@@ -190,6 +192,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "LoopAgent '$name' cannot declare includeContents."
                 }
+                require(codeExecutor == null) { "LoopAgent '$name' cannot declare codeExecutor." }
                 require(inputSchema == null) { "LoopAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "LoopAgent '$name' cannot declare outputKey." }
@@ -209,6 +212,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "ParallelAgent '$name' cannot declare includeContents."
                 }
+                require(codeExecutor == null) { "ParallelAgent '$name' cannot declare codeExecutor." }
                 require(inputSchema == null) { "ParallelAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "ParallelAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "ParallelAgent '$name' cannot declare outputKey." }

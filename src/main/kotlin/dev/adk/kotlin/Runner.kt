@@ -358,6 +358,8 @@ class Runner(
         toolExecutions: MutableList<ToolExecution>,
         allowExitLoop: Boolean,
     ): ExecutionOutcome {
+        var consecutiveCodeExecutionErrors = 0
+
         repeat(agent.maxIterations) {
             val workingSession = snapshotSession(baseSession, workingState, transcript, events)
             val callbackContext = CallbackContext(invocationContext = invocationContext, agent = agent)
@@ -371,7 +373,8 @@ class Runner(
                     includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
                     includeExitLoopTool = allowExitLoop,
                 )
-            val finalRequest = agent.planner?.prepareRequest(workingSession, request) ?: request
+            val plannedRequest = agent.planner?.prepareRequest(workingSession, request) ?: request
+            val finalRequest = agent.codeExecutor?.processLlmRequest(plannedRequest) ?: plannedRequest
 
             val response =
                 pluginManager.runBeforeModelCallback(callbackContext, finalRequest)
@@ -389,6 +392,20 @@ class Runner(
 
             when (finalModelResponse) {
                 is ModelResponse.Final -> {
+                    maybeExecuteCodeBlock(
+                        agent = agent,
+                        response = finalModelResponse,
+                        workingState = workingState,
+                        transcript = transcript,
+                        events = events,
+                        invocationContext = invocationContext,
+                        consecutiveCodeExecutionErrors = consecutiveCodeExecutionErrors,
+                    )?.let { nextErrorCount ->
+                        consecutiveCodeExecutionErrors = nextErrorCount
+                        return@repeat
+                    }
+
+                    consecutiveCodeExecutionErrors = 0
                     val structuredResponse =
                         validateStructuredResponse(
                             agent = agent,
@@ -642,6 +659,97 @@ class Runner(
         error("Agent ${agent.name} exceeded maxIterations=${agent.maxIterations}.")
     }
 
+    private suspend fun maybeExecuteCodeBlock(
+        agent: LlmAgent,
+        response: ModelResponse.Final,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        consecutiveCodeExecutionErrors: Int,
+    ): Int? {
+        if (response.structuredResponse != null) {
+            return null
+        }
+
+        val codeExecutor = agent.codeExecutor ?: return null
+        if (codeExecutor is BuiltInCodeExecutor) {
+            return null
+        }
+        if (consecutiveCodeExecutionErrors >= codeExecutor.errorRetryAttempts) {
+            return null
+        }
+
+        val extractedCode = codeExecutor.extractCodeAndTruncateContent(response.message) ?: return null
+        if (extractedCode.prefix.isNotBlank()) {
+            emitEvent(
+                invocationContext = invocationContext,
+                events = events,
+                event =
+                    Event(
+                        invocationId = invocationContext.invocationId,
+                        author = agent.name,
+                        content = ModelMessage(extractedCode.prefix),
+                        branch = app.branchOf(agent),
+                    ),
+                transcript = transcript,
+            )
+        }
+
+        val codeExecutionResult =
+            try {
+                codeExecutor.executeCode(
+                    invocationContext = invocationContext,
+                    codeExecutionInput =
+                        CodeExecutionInput(
+                            code = extractedCode.code,
+                            executionId = invocationContext.session.id.takeIf { codeExecutor.stateful },
+                        ),
+                )
+            } catch (error: Throwable) {
+                CodeExecutionResult(
+                    stderr = error.message ?: "Code execution failed.",
+                )
+            }
+
+        codeExecutionResult.stateDelta.forEach { (key, value) ->
+            if (value == null) {
+                workingState.remove(key)
+            } else {
+                workingState[key] = value
+            }
+        }
+
+        val artifactDelta =
+            persistCodeExecutionArtifacts(
+                invocationContext = invocationContext,
+                result = codeExecutionResult,
+            )
+        emitEvent(
+            invocationContext = invocationContext,
+            events = events,
+            event =
+                Event(
+                    invocationId = invocationContext.invocationId,
+                    author = agent.name,
+                    content = ModelMessage(codeExecutor.formatExecutionResult(codeExecutionResult)),
+                    actions =
+                        EventActions(
+                            stateDelta = codeExecutionResult.stateDelta,
+                            artifactDelta = artifactDelta,
+                        ),
+                    branch = app.branchOf(agent),
+                ),
+            transcript = transcript,
+        )
+
+        return if (codeExecutionResult.hasError) {
+            consecutiveCodeExecutionErrors + 1
+        } else {
+            0
+        }
+    }
+
     private suspend fun emitEvent(
         invocationContext: InvocationContext,
         events: MutableList<Event>,
@@ -739,6 +847,29 @@ class Runner(
         agent.outputKey?.takeIf { it.isNotBlank() }?.let { outputKey ->
             workingState[outputKey] = finalMessage
         }
+    }
+
+    private suspend fun persistCodeExecutionArtifacts(
+        invocationContext: InvocationContext,
+        result: CodeExecutionResult,
+    ): Map<String, Int> {
+        if (result.outputFiles.isEmpty()) {
+            return emptyMap()
+        }
+
+        val artifactDelta = linkedMapOf<String, Int>()
+        result.outputFiles.forEach { outputFile ->
+            val version =
+                artifactService.saveArtifact(
+                    appName = app.name,
+                    userId = invocationContext.userId,
+                    sessionId = invocationContext.session.id,
+                    filename = outputFile.name,
+                    artifact = Artifact(outputFile.content),
+                )
+            artifactDelta[outputFile.name] = version
+        }
+        return artifactDelta
     }
 
     private suspend fun executeAgentTool(

@@ -39,6 +39,8 @@ but the API shape here follows Kotlin conventions first:
   `PlanReActPlanner` instruction injection.
 - Controlled I/O semantics with `includeContents` and `outputKey`.
 - Agent-as-tool support with `inputSchema` and `AgentTool`.
+- Code executor foundations with official-style `codeExecutor`, built-in model
+  markers, and an `UnsafeLocalCodeExecutor` retry loop.
 
 ## Current Scope
 
@@ -60,6 +62,7 @@ The repository currently contains the first runnable foundation:
 - Planner support for model-native thinking and NL plan/react prompting.
 - Controlled transcript inclusion and session-state output persistence.
 - Wrapped-agent tool execution with schema-derived tool declarations.
+- Code-executor request preprocessing and local fenced-code execution retries.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -160,6 +163,16 @@ val researcherTool: Tool =
             outputKey = "last_topic_summary"
         },
     )
+
+val analyst: Agent =
+    agent("analyst") {
+        model = "gemini-2.5-pro"
+        codeExecutor =
+            unsafeLocalCodeExecutor(
+                timeoutSeconds = 10,
+                errorRetryAttempts = 2,
+            )
+    }
 ```
 
 Provider modules can now plug in through `BaseLlm` and `LlmRegistry`:

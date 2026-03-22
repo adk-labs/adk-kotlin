@@ -185,6 +185,7 @@ class AgentDslTest {
     @Test
     fun `stores planner configuration on llm agents`() {
         val planner = builtInPlanner { thinkingBudget = 128 }
+        val codeExecutor = unsafeLocalCodeExecutor(timeoutSeconds = 5)
 
         val app =
             adkApp("planner-app") {
@@ -192,6 +193,7 @@ class AgentDslTest {
                     model = "gemini-2.5-pro"
                     this.planner = planner
                     includeContents = IncludeContents.NONE
+                    this.codeExecutor = codeExecutor
                     inputSchema {
                         string("topic", description = "Topic to analyze")
                     }
@@ -201,6 +203,7 @@ class AgentDslTest {
 
         assertEquals(planner, app.rootAgent.planner)
         assertEquals(IncludeContents.NONE, app.rootAgent.includeContents)
+        assertEquals(codeExecutor, app.rootAgent.codeExecutor)
         assertEquals(ToolSchemaType.OBJECT, app.rootAgent.inputSchema?.type)
         assertEquals(listOf("topic"), app.rootAgent.inputSchema?.required)
         assertEquals("planner_output", app.rootAgent.outputKey)

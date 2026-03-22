@@ -863,6 +863,148 @@ class RunnerTest {
         }
 
     @Test
+    fun `runner executes code blocks through unsafe local code executor and continues the loop`() =
+        runTest {
+            var modelCalls = 0
+
+            val app =
+                adkApp("code-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        codeExecutor = unsafeLocalCodeExecutor(timeoutSeconds = 5)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertEquals(1, request.conversation.size)
+                            ModelResponse.Final(
+                                """
+                                Let me calculate that.
+                                ```python
+                                print(2 + 2)
+                                ```
+                                """.trimIndent(),
+                            )
+                        }
+
+                        2 -> {
+                            assertEquals("```tool_output\nCode execution result:\n4\n```", request.session.transcript.last().text)
+                            ModelResponse.Final("The answer is 4.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "What is 2 + 2?",
+                )
+
+            assertEquals("The answer is 4.", result.finalMessage)
+            assertEquals(4, result.events.size)
+            assertEquals("Let me calculate that.", result.events[1].content?.text)
+            assertEquals("```tool_output\nCode execution result:\n4\n```", result.events[2].content?.text)
+            assertTrue(result.toolExecutions.isEmpty())
+        }
+
+    @Test
+    fun `runner retries after code execution failure and exposes built in code execution markers`() =
+        runTest {
+            var localModelCalls = 0
+
+            val localApp =
+                adkApp("code-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        codeExecutor =
+                            unsafeLocalCodeExecutor(
+                                timeoutSeconds = 5,
+                                errorRetryAttempts = 2,
+                            )
+                    }
+                }
+
+            val localModel =
+                LanguageModel { request ->
+                    localModelCalls += 1
+                    when (localModelCalls) {
+                        1 ->
+                            ModelResponse.Final(
+                                """
+                                ```python
+                                raise ValueError("boom")
+                                ```
+                                """.trimIndent(),
+                            )
+
+                        2 -> {
+                            assertTrue(request.session.transcript.last().text.contains("boom"))
+                            ModelResponse.Final(
+                                """
+                                ```python
+                                print(6 * 7)
+                                ```
+                                """.trimIndent(),
+                            )
+                        }
+
+                        3 -> {
+                            assertTrue(request.session.transcript.last().text.contains("42"))
+                            ModelResponse.Final("Recovered with 42.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val localRunner = Runner(app = localApp, model = localModel)
+            val localResult =
+                localRunner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Recover from a failing script.",
+                )
+
+            assertEquals("Recovered with 42.", localResult.finalMessage)
+            assertEquals(4, localResult.events.size)
+            assertTrue(localResult.events[1].content?.text.orEmpty().contains("boom"))
+            assertTrue(localResult.events[2].content?.text.orEmpty().contains("42"))
+
+            val builtInApp =
+                adkApp("built-in-code-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        codeExecutor = builtInCodeExecutor()
+                    }
+                }
+
+            val builtInModel =
+                LanguageModel { request ->
+                    assertTrue(request.availableTools.any { tool -> tool.name == BaseCodeExecutor.BUILT_IN_TOOL_NAME })
+                    ModelResponse.Final("Built-in executor request prepared.")
+                }
+
+            val builtInRunner = Runner(app = builtInApp, model = builtInModel)
+            val builtInResult =
+                builtInRunner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use native code execution.",
+                )
+
+            assertEquals("Built-in executor request prepared.", builtInResult.finalMessage)
+        }
+
+    @Test
     fun `runner executes parallel agents in isolated branches and merges by completion order`() =
         runTest {
             val callCounts = mutableMapOf<String, Int>()
