@@ -8,6 +8,9 @@ internal object PromptAssembler {
             "using the set_model_response tool with the required structured format. After using " +
             "any other tools needed to complete the task, always call set_model_response with " +
             "your final answer in the specified schema format."
+    internal const val EXIT_LOOP_INSTRUCTION =
+        "If you have completed the loop's task and the loop should stop, call " +
+            "exit_loop. When calling exit_loop, do not generate any text other than the function call."
 
     suspend fun createRequest(
         app: AdkApp,
@@ -16,6 +19,7 @@ internal object PromptAssembler {
         transcript: List<Message>,
         artifactService: ArtifactService? = null,
         includeOutputSchemaWorkaround: Boolean = false,
+        includeExitLoopTool: Boolean = false,
     ): ModelRequest {
         val systemInstructions = mutableListOf<String>()
         val nativeOutputSchema = nativeOutputSchema(agent, includeOutputSchemaWorkaround)
@@ -60,6 +64,10 @@ internal object PromptAssembler {
             systemInstructions += SET_MODEL_RESPONSE_INSTRUCTION
         }
 
+        if (includeExitLoopTool) {
+            systemInstructions += EXIT_LOOP_INSTRUCTION
+        }
+
         val transferTargets = app.transferTargetsOf(agent)
         if (transferTargets.isNotEmpty()) {
             systemInstructions += buildTransferInstructions(agent, app, transferTargets)
@@ -82,6 +90,7 @@ internal object PromptAssembler {
                     agent = agent,
                     transferTargets = transferTargets,
                     includeOutputSchemaWorkaround = includeOutputSchemaWorkaround,
+                    includeExitLoopTool = includeExitLoopTool,
                 ),
             config = requestConfig,
             outputSchema = nativeOutputSchema,
@@ -280,6 +289,7 @@ internal object PromptAssembler {
         agent: LlmAgent,
         transferTargets: List<LlmAgent>,
         includeOutputSchemaWorkaround: Boolean,
+        includeExitLoopTool: Boolean,
     ): List<ToolDefinition> {
         val tools = agent.tools.map { it.definition }.toMutableList()
 
@@ -326,6 +336,14 @@ internal object PromptAssembler {
                                 allowedValues = transferTargets.map { it.name }.sorted(),
                             ),
                         ),
+                )
+        }
+
+        if (includeExitLoopTool) {
+            tools +=
+                ToolDefinition(
+                    name = Runner.EXIT_LOOP_TOOL,
+                    description = "Exit the current loop when the task is complete.",
                 )
         }
 

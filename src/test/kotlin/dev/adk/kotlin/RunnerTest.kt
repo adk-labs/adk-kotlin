@@ -794,4 +794,70 @@ class RunnerTest {
                 result.events.map { it.author },
             )
         }
+
+    @Test
+    fun `runner executes loop agents until exit_loop and keeps the last meaningful result`() =
+        runTest {
+            var modelCalls = 0
+
+            val worker =
+                agent("worker") {
+                    model = "gemini-2.5-flash"
+                    instruction("Iterate until the task is complete.")
+                }
+
+            val app =
+                adkApp("loop-app") {
+                    rootAgent(
+                        loopAgent("orchestrator") {
+                            description = "Repeats work until complete."
+                            maxIterations = 3
+                            subAgents(worker)
+                        },
+                    )
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertEquals("worker", request.agent.name)
+                            assertTrue(request.availableTools.any { it.name == Runner.EXIT_LOOP_TOOL })
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains(PromptAssembler.EXIT_LOOP_INSTRUCTION),
+                            )
+                            ModelResponse.Final("Draft result.")
+                        }
+
+                        2 -> {
+                            assertEquals("worker", request.agent.name)
+                            assertEquals("Draft result.", request.session.transcript.last().text)
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(Runner.EXIT_LOOP_TOOL),
+                                ),
+                            )
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Loop until done.",
+                )
+
+            assertEquals("Draft result.", result.finalMessage)
+            assertEquals("worker", result.finalAgentName)
+            assertEquals(Runner.EXIT_LOOP_TOOL, result.toolExecutions.last().call.toolName)
+            assertEquals(true, result.events.last().actions.escalate)
+        }
 }

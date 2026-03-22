@@ -21,6 +21,9 @@ fun llmAgent(name: String, block: LlmAgentDsl.() -> Unit): LlmAgent =
 fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit): SequentialAgent =
     SequentialAgentDsl(name).apply(block).build()
 
+fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit): LoopAgent =
+    LoopAgentDsl(name).apply(block).build()
+
 @AdkDsl
 class AppDsl internal constructor(
     private val name: String,
@@ -114,6 +117,10 @@ class LlmAgentDsl internal constructor(
         subAgents += dev.adk.kotlin.sequentialAgent(name, block)
     }
 
+    fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.loopAgent(name, block)
+    }
+
     internal fun build(): LlmAgent =
         LlmAgent(
             name = name,
@@ -157,6 +164,10 @@ class SequentialAgentDsl internal constructor(
         subAgents += dev.adk.kotlin.sequentialAgent(name, block)
     }
 
+    fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.loopAgent(name, block)
+    }
+
     fun subAgents(vararg agents: LlmAgent) {
         subAgents += agents
     }
@@ -167,5 +178,40 @@ class SequentialAgentDsl internal constructor(
             description = description.trim(),
             subAgents = subAgents.toList(),
             executionKind = AgentExecutionKind.SEQUENTIAL,
+        )
+}
+
+@AdkDsl
+class LoopAgentDsl internal constructor(
+    private val name: String,
+) {
+    var description: String = ""
+    var maxIterations: Int? = null
+
+    private val subAgents = mutableListOf<LlmAgent>()
+
+    fun subAgent(name: String, block: LlmAgentDsl.() -> Unit) {
+        subAgents += llmAgent(name, block)
+    }
+
+    fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.sequentialAgent(name, block)
+    }
+
+    fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.loopAgent(name, block)
+    }
+
+    fun subAgents(vararg agents: LlmAgent) {
+        subAgents += agents
+    }
+
+    internal fun build(): LoopAgent =
+        LlmAgent(
+            name = name,
+            description = description.trim(),
+            subAgents = subAgents.toList(),
+            loopMaxIterations = maxIterations,
+            executionKind = AgentExecutionKind.LOOP,
         )
 }

@@ -136,4 +136,24 @@ class AgentDslTest {
         assertEquals("", app.rootAgent.model)
         assertEquals(listOf("researcher", "reviewer"), app.rootAgent.subAgents.map { it.name })
     }
+
+    @Test
+    fun `builds loop agents with official naming`() {
+        val worker =
+            agent("worker") {
+                model = "gemini-2.5-flash"
+                instruction("Iterate until the task is complete.")
+            }
+
+        val orchestrator: LoopAgent =
+            loopAgent("orchestrator") {
+                description = "Repeats work until exit."
+                maxIterations = 3
+                subAgents(worker)
+            }
+
+        assertEquals(AgentExecutionKind.LOOP, orchestrator.executionKind)
+        assertEquals(3, orchestrator.loopMaxIterations)
+        assertEquals(listOf("worker"), orchestrator.subAgents.map { it.name })
+    }
 }

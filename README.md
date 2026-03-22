@@ -33,7 +33,8 @@ but the API shape here follows Kotlin conventions first:
   user-defined tools.
 - File-backed session/artifact backends and a first-class memory service
   surface.
-- Sequential shell agents for official-style multi-agent orchestration.
+- Sequential and loop shell agents for official-style multi-agent
+  orchestration.
 
 ## Current Scope
 
@@ -50,7 +51,8 @@ The repository currently contains the first runnable foundation:
 - A plugin manager and global plugin callbacks integrated into `Runner`.
 - Structured tool schema support for built-in and user-defined tools.
 - Persistent file-backed session/artifact services and in-memory memory search.
-- Sequential shell-agent orchestration on top of the same runner/event model.
+- Sequential and loop shell-agent orchestration on top of the same
+  runner/event model.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -97,6 +99,18 @@ val pipeline: SequentialAgent =
     sequentialAgent("pipeline") {
         description = "Runs specialists in order."
         subAgents(greeter, app.rootAgent)
+    }
+
+val orchestrator: LoopAgent =
+    loopAgent("orchestrator") {
+        description = "Repeats work until a worker exits the loop."
+        maxIterations = 3
+        subAgents(
+            agent("worker") {
+                model = "gemini-2.5-flash"
+                instruction("Work until complete, then call exit_loop.")
+            }
+        )
     }
 ```
 
@@ -194,6 +208,7 @@ The Kotlin runtime now follows the official ADK layering:
 3. Framework identity instruction.
 4. Output schema workaround instruction when `outputSchema` and tools coexist.
 5. Transfer instructions when agent handoff is available.
+6. Loop-exit instruction when a `LoopAgent` exposes `exit_loop`.
 
 Structured output now follows the official split path as well:
 
@@ -209,5 +224,6 @@ Structured output now follows the official split path as well:
 - Add richer plugin behaviors such as request mutation and built-in plugins.
 - Add richer tool runtime semantics such as confirmations and toolsets.
 - Add database/cloud session and artifact backends.
+- Add `ParallelAgent` and planner layers for broader orchestration parity.
 - Align more of the official runtime surface, including broader tool/runtime
   schemas and storage modules.

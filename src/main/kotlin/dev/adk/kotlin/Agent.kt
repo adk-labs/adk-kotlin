@@ -5,6 +5,7 @@ private val AGENT_NAME_PATTERN = Regex("^_?[a-zA-Z0-9]*([. _-][a-zA-Z0-9]+)*$")
 enum class AgentExecutionKind {
     LLM,
     SEQUENTIAL,
+    LOOP,
 }
 
 data class AdkApp(
@@ -114,6 +115,7 @@ data class AdkApp(
 }
 
 typealias SequentialAgent = LlmAgent
+typealias LoopAgent = LlmAgent
 
 data class LlmAgent(
     val name: String,
@@ -126,6 +128,7 @@ data class LlmAgent(
     val tools: List<Tool> = emptyList(),
     val subAgents: List<LlmAgent> = emptyList(),
     val maxIterations: Int = 8,
+    val loopMaxIterations: Int? = null,
     val disallowTransferToParent: Boolean = false,
     val disallowTransferToPeers: Boolean = false,
     val executionKind: AgentExecutionKind = AgentExecutionKind.LLM,
@@ -144,16 +147,31 @@ data class LlmAgent(
         when (executionKind) {
             AgentExecutionKind.LLM -> {
                 require(model.isNotBlank()) { "Agent model cannot be blank." }
+                require(loopMaxIterations == null) { "LlmAgent '$name' cannot declare loopMaxIterations." }
             }
 
             AgentExecutionKind.SEQUENTIAL -> {
                 require(model.isBlank()) { "SequentialAgent '$name' must not declare a model." }
                 require(subAgents.isNotEmpty()) { "SequentialAgent '$name' must declare at least one sub-agent." }
+                require(loopMaxIterations == null) { "SequentialAgent '$name' cannot declare loopMaxIterations." }
                 require(instruction == null) { "SequentialAgent '$name' cannot declare instruction." }
                 require(staticInstruction == null) { "SequentialAgent '$name' cannot declare staticInstruction." }
                 require(generateContentConfig == null) { "SequentialAgent '$name' cannot declare generateContentConfig." }
                 require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
                 require(tools.isEmpty()) { "SequentialAgent '$name' cannot declare tools." }
+            }
+
+            AgentExecutionKind.LOOP -> {
+                require(model.isBlank()) { "LoopAgent '$name' must not declare a model." }
+                require(subAgents.isNotEmpty()) { "LoopAgent '$name' must declare at least one sub-agent." }
+                require(loopMaxIterations == null || loopMaxIterations > 0) {
+                    "LoopAgent '$name' must declare a positive loopMaxIterations."
+                }
+                require(instruction == null) { "LoopAgent '$name' cannot declare instruction." }
+                require(staticInstruction == null) { "LoopAgent '$name' cannot declare staticInstruction." }
+                require(generateContentConfig == null) { "LoopAgent '$name' cannot declare generateContentConfig." }
+                require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
+                require(tools.isEmpty()) { "LoopAgent '$name' cannot declare tools." }
             }
         }
     }

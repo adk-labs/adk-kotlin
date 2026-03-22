@@ -22,6 +22,7 @@ private data class ExecutionOutcome(
     val finalEvent: Event,
     val finalAgentName: String,
     val structuredResponse: Any? = null,
+    val shouldEscalate: Boolean = false,
 )
 
 class Runner(
@@ -37,6 +38,7 @@ class Runner(
     internal companion object {
         const val TRANSFER_TO_AGENT_TOOL = "transfer_to_agent"
         const val SET_MODEL_RESPONSE_TOOL = "set_model_response"
+        const val EXIT_LOOP_TOOL = "exit_loop"
     }
 
     suspend fun run(
@@ -117,6 +119,7 @@ class Runner(
                 events = events,
                 invocationContext = invocationContext,
                 toolExecutions = toolExecutions,
+                allowExitLoop = false,
             )
 
         val runResult =
@@ -146,6 +149,7 @@ class Runner(
         events: MutableList<Event>,
         invocationContext: InvocationContext,
         toolExecutions: MutableList<ToolExecution>,
+        allowExitLoop: Boolean,
     ): ExecutionOutcome =
         when (agent.executionKind) {
             AgentExecutionKind.LLM ->
@@ -157,10 +161,23 @@ class Runner(
                     events = events,
                     invocationContext = invocationContext,
                     toolExecutions = toolExecutions,
+                    allowExitLoop = allowExitLoop,
                 )
 
             AgentExecutionKind.SEQUENTIAL ->
                 runSequentialAgent(
+                    agent = agent,
+                    baseSession = baseSession,
+                    workingState = workingState,
+                    transcript = transcript,
+                    events = events,
+                    invocationContext = invocationContext,
+                    toolExecutions = toolExecutions,
+                    allowExitLoop = allowExitLoop,
+                )
+
+            AgentExecutionKind.LOOP ->
+                runLoopAgent(
                     agent = agent,
                     baseSession = baseSession,
                     workingState = workingState,
@@ -179,6 +196,7 @@ class Runner(
         events: MutableList<Event>,
         invocationContext: InvocationContext,
         toolExecutions: MutableList<ToolExecution>,
+        allowExitLoop: Boolean,
     ): ExecutionOutcome {
         var lastOutcome: ExecutionOutcome? = null
         agent.subAgents.forEach { subAgent ->
@@ -191,9 +209,54 @@ class Runner(
                     events = events,
                     invocationContext = invocationContext,
                     toolExecutions = toolExecutions,
+                    allowExitLoop = allowExitLoop,
                 )
+            if (lastOutcome?.shouldEscalate == true) {
+                return lastOutcome as ExecutionOutcome
+            }
         }
         return requireNotNull(lastOutcome) { "SequentialAgent '${agent.name}' must produce at least one outcome." }
+    }
+
+    private suspend fun runLoopAgent(
+        agent: LlmAgent,
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        toolExecutions: MutableList<ToolExecution>,
+    ): ExecutionOutcome {
+        val maxIterations = agent.loopMaxIterations ?: Int.MAX_VALUE
+        var lastMeaningfulOutcome: ExecutionOutcome? = null
+
+        repeat(maxIterations) {
+            agent.subAgents.forEach { subAgent ->
+                val outcome =
+                    runAgent(
+                        agent = subAgent,
+                        baseSession = baseSession,
+                        workingState = workingState,
+                        transcript = transcript,
+                        events = events,
+                        invocationContext = invocationContext,
+                        toolExecutions = toolExecutions,
+                        allowExitLoop = true,
+                    )
+
+                if (!outcome.shouldEscalate) {
+                    lastMeaningfulOutcome = outcome
+                }
+
+                if (outcome.shouldEscalate) {
+                    return lastMeaningfulOutcome ?: outcome
+                }
+            }
+        }
+
+        return requireNotNull(lastMeaningfulOutcome) {
+            "LoopAgent '${agent.name}' completed without producing a meaningful outcome."
+        }
     }
 
     private suspend fun runLlmAgent(
@@ -204,6 +267,7 @@ class Runner(
         events: MutableList<Event>,
         invocationContext: InvocationContext,
         toolExecutions: MutableList<ToolExecution>,
+        allowExitLoop: Boolean,
     ): ExecutionOutcome {
         repeat(agent.maxIterations) {
             val workingSession = snapshotSession(baseSession, workingState, transcript, events)
@@ -216,6 +280,7 @@ class Runner(
                     transcript = transcript.toList(),
                     artifactService = artifactService,
                     includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
+                    includeExitLoopTool = allowExitLoop,
                 )
 
             val response =
@@ -317,6 +382,45 @@ class Runner(
                             events = events,
                             invocationContext = invocationContext,
                             toolExecutions = toolExecutions,
+                            allowExitLoop = allowExitLoop,
+                        )
+                    }
+
+                    val exitLoopCall = finalModelResponse.calls.singleOrNull { it.toolName == EXIT_LOOP_TOOL }
+                    if (exitLoopCall != null) {
+                        require(allowExitLoop) { "exit_loop is only valid inside LoopAgent execution." }
+                        require(finalModelResponse.calls.size == 1) {
+                            "exit_loop must be the only tool call in a turn."
+                        }
+
+                        val output = ToolOutput("Loop exit requested.")
+                        toolExecutions +=
+                            ToolExecution(
+                                agentName = agent.name,
+                                call = exitLoopCall,
+                                output = output,
+                            )
+                        val emittedEvent =
+                            emitEvent(
+                                invocationContext = invocationContext,
+                                events = events,
+                                event =
+                                    Event(
+                                        invocationId = invocationContext.invocationId,
+                                        author = agent.name,
+                                        content = ToolMessage(toolName = EXIT_LOOP_TOOL, text = output.content),
+                                        actions =
+                                            EventActions(
+                                                escalate = true,
+                                            ),
+                                        branch = app.branchOf(agent),
+                                    ),
+                                transcript = transcript,
+                            )
+                        return ExecutionOutcome(
+                            finalEvent = emittedEvent,
+                            finalAgentName = agent.name,
+                            shouldEscalate = true,
                         )
                     }
 
