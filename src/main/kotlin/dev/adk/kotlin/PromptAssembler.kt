@@ -295,7 +295,7 @@ internal object PromptAssembler {
         outputSchema: OutputSchema?,
         includeExitLoopTool: Boolean,
     ): List<ToolDefinition> {
-        val tools = toolDefinitions.toMutableList()
+        val tools = toolDefinitions.filterNot(ToolDefinition::isHidden).toMutableList()
 
         if (includeOutputSchemaWorkaround) {
             val requiredOutputSchema = requireNotNull(outputSchema) { "outputSchema must be set when workaround is enabled." }

@@ -49,6 +49,8 @@ but the API shape here follows Kotlin conventions first:
   approval directly during execution.
 - `BaseAuthenticatedTool` and `BaseToolset` foundations for auth-aware tools
   and grouped tool modules.
+- Official-style built-in utility tools for `loadMemory`, `preloadMemory`, and
+  `loadArtifacts`, including request preprocessing hooks.
 
 ## Current Scope
 
@@ -76,6 +78,8 @@ The repository currently contains the first runnable foundation:
 - Tool-driven confirmation requests propagated on emitted tool events.
 - Toolset expansion and authenticated-tool execution on top of the auth
   runtime.
+- Built-in memory/artifact utility tools wired into the same request-building
+  pipeline as official ADK preprocessors.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -210,6 +214,12 @@ val authAwareTool: Tool =
             ),
         )
         ToolOutput("Authentication required.")
+    }
+
+val memoryAwareAgent: Agent =
+    agent("memory_aware") {
+        model = "gemini-2.5-pro"
+        tools(loadMemory, preloadMemory, loadArtifacts)
     }
 
 val publishTool: Tool =

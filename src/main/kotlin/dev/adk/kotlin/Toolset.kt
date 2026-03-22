@@ -40,6 +40,11 @@ private class PrefixedTool(
 ) : Tool {
     override val definition: ToolDefinition = tool.definition.copy(name = "${prefix}_${tool.definition.name}")
 
+    override suspend fun processLlmRequest(
+        toolContext: ToolContext,
+        llmRequest: LlmRequest,
+    ): LlmRequest = tool.processLlmRequest(toolContext, llmRequest)
+
     override suspend fun execute(
         call: ToolCall,
         context: ToolContext,

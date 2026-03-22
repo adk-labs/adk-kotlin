@@ -378,7 +378,15 @@ class Runner(
                     includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
                     includeExitLoopTool = allowExitLoop,
                 )
-            val plannedRequest = agent.planner?.prepareRequest(workingSession, request) ?: request
+            val preprocessedRequest =
+                preprocessLlmRequest(
+                    agent = agent,
+                    session = workingSession,
+                    workingState = workingState,
+                    resolvedTools = resolvedTools,
+                    llmRequest = request,
+                )
+            val plannedRequest = agent.planner?.prepareRequest(workingSession, preprocessedRequest) ?: preprocessedRequest
             val finalRequest = agent.codeExecutor?.processLlmRequest(plannedRequest) ?: plannedRequest
 
             val response =
@@ -610,25 +618,12 @@ class Runner(
                         }
 
                         val context =
-                            ToolContext(
-                                appName = app.name,
+                            createToolContext(
                                 agent = agent,
                                 session = workingSession,
                                 workingState = workingState,
-                                artifactService = artifactService,
-                                memoryService = memoryService,
-                                credentialService = credentialService,
                                 functionCallId = callId,
                                 toolConfirmation = confirmation,
-                                agentToolExecutor = { toolContext, toolAgent, arguments, skipSummarization, includePlugins ->
-                                    executeAgentTool(
-                                        toolContext = toolContext,
-                                        toolAgent = toolAgent,
-                                        arguments = arguments,
-                                        skipSummarization = skipSummarization,
-                                        includePlugins = includePlugins,
-                                    )
-                                },
                             )
                         val stateBeforeTool = workingState.toMap()
                         val beforeToolOutput = pluginManager.runBeforeToolCallback(tool, call, context)
@@ -908,6 +903,59 @@ class Runner(
             transcript = transcript.toList(),
             events = events.toList(),
             updatedAt = Instant.now(),
+        )
+
+    private suspend fun preprocessLlmRequest(
+        agent: LlmAgent,
+        session: AgentSession,
+        workingState: MutableMap<String, String>,
+        resolvedTools: List<Tool>,
+        llmRequest: LlmRequest,
+    ): LlmRequest {
+        val preprocessingContext =
+            createToolContext(
+                agent = agent,
+                session = session,
+                workingState = workingState.toMutableMap(),
+            )
+        var currentRequest = llmRequest
+
+        resolvedTools.forEach { tool ->
+            currentRequest = tool.processLlmRequest(preprocessingContext, currentRequest)
+        }
+        agent.toolsets.forEach { toolset ->
+            currentRequest = toolset.processLlmRequest(preprocessingContext, currentRequest)
+        }
+
+        return currentRequest
+    }
+
+    private fun createToolContext(
+        agent: LlmAgent,
+        session: AgentSession,
+        workingState: MutableMap<String, String>,
+        functionCallId: String? = null,
+        toolConfirmation: ToolConfirmation? = null,
+    ): ToolContext =
+        ToolContext(
+            appName = app.name,
+            agent = agent,
+            session = session,
+            workingState = workingState,
+            artifactService = artifactService,
+            memoryService = memoryService,
+            credentialService = credentialService,
+            functionCallId = functionCallId,
+            toolConfirmation = toolConfirmation,
+            agentToolExecutor = { toolContext, toolAgent, arguments, skipSummarization, includePlugins ->
+                executeAgentTool(
+                    toolContext = toolContext,
+                    toolAgent = toolAgent,
+                    arguments = arguments,
+                    skipSummarization = skipSummarization,
+                    includePlugins = includePlugins,
+                )
+            },
         )
 
     private suspend fun resolveTools(

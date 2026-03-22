@@ -1798,4 +1798,197 @@ class RunnerTest {
             assertEquals("researcher", result.toolExecutions.single().call.toolName)
             assertEquals("Research summary.", result.toolExecutions.single().output.content)
         }
+
+    @Test
+    fun `load memory tool appends instructions and exposes matching memories`() =
+        runTest {
+            val memoryService = InMemoryMemoryService()
+            memoryService.addMemory(
+                appName = "memory-app",
+                userId = "user-1",
+                memories =
+                    listOf(
+                        MemoryEntry(
+                            text = "User likes ramen in Seoul.",
+                            appName = "memory-app",
+                            userId = "user-1",
+                        ),
+                    ),
+            )
+
+            var modelCalls = 0
+            val app =
+                adkApp("memory-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(loadMemory)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertTrue(request.availableTools.any { tool -> tool.name == "load_memory" })
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains("call load_memory function with a query"),
+                            )
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "load_memory",
+                                        arguments = mapOf("query" to "ramen"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            assertTrue(request.session.transcript.last().text.contains("User likes ramen in Seoul."))
+                            ModelResponse.Final("Used loaded memory.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    memoryService = memoryService,
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Find my food preference.",
+                )
+
+            assertEquals("Used loaded memory.", result.finalMessage)
+            assertEquals("load_memory", result.toolExecutions.single().call.toolName)
+            assertTrue(result.toolExecutions.single().output.content.contains("User likes ramen in Seoul."))
+        }
+
+    @Test
+    fun `preload memory tool injects past conversations and stays hidden from the model`() =
+        runTest {
+            val memoryService = InMemoryMemoryService()
+            memoryService.addMemory(
+                appName = "memory-app",
+                userId = "user-1",
+                memories =
+                    listOf(
+                        MemoryEntry(
+                            text = "User prefers aisle seats on long flights.",
+                            appName = "memory-app",
+                            userId = "user-1",
+                        ),
+                    ),
+            )
+
+            val app =
+                adkApp("memory-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(preloadMemory)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertTrue(request.availableTools.none { tool -> tool.name == "preload_memory" })
+                    assertTrue(request.systemInstruction.orEmpty().contains("<PAST_CONVERSATIONS>"))
+                    assertTrue(request.systemInstruction.orEmpty().contains("User prefers aisle seats on long flights."))
+                    ModelResponse.Final("Used preloaded memory.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    memoryService = memoryService,
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "aisle seats",
+                )
+
+            assertEquals("Used preloaded memory.", result.finalMessage)
+        }
+
+    @Test
+    fun `load artifacts tool advertises artifacts and loads user scoped content`() =
+        runTest {
+            val artifactService = InMemoryArtifactService()
+            artifactService.saveArtifact(
+                appName = "artifact-app",
+                userId = "user-1",
+                sessionId = null,
+                filename = "report.txt",
+                artifact = Artifact("Quarterly summary"),
+            )
+
+            var modelCalls = 0
+            val app =
+                adkApp("artifact-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(loadArtifacts)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertTrue(request.availableTools.any { tool -> tool.name == "load_artifacts" })
+                            assertTrue(request.systemInstruction.orEmpty().contains("You have a list of artifacts:"))
+                            assertTrue(request.systemInstruction.orEmpty().contains("report.txt"))
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "load_artifacts",
+                                        arguments = mapOf("artifact_names" to listOf("report.txt")),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            assertTrue(request.session.transcript.last().text.contains("Artifact report.txt is:"))
+                            assertTrue(request.session.transcript.last().text.contains("Quarterly summary"))
+                            ModelResponse.Final("Loaded artifact content.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    artifactService = artifactService,
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Open the report.",
+                )
+
+            assertEquals("Loaded artifact content.", result.finalMessage)
+            assertEquals("load_artifacts", result.toolExecutions.single().call.toolName)
+            assertTrue(result.toolExecutions.single().output.content.contains("Quarterly summary"))
+        }
 }

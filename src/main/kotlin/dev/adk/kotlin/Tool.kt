@@ -31,6 +31,9 @@ data class ToolOutput(
 val ToolDefinition.effectiveJsonSchema: ToolSchema?
     get() = jsonSchema ?: parameters.toToolSchema()
 
+internal val ToolDefinition.isHidden: Boolean
+    get() = customMetadata["hidden"] == true
+
 fun List<ToolParameter>.toToolSchema(): ToolSchema? {
     if (isEmpty()) {
         return null
@@ -50,6 +53,11 @@ fun List<ToolParameter>.toToolSchema(): ToolSchema? {
 
 interface Tool {
     val definition: ToolDefinition
+
+    suspend fun processLlmRequest(
+        toolContext: ToolContext,
+        llmRequest: LlmRequest,
+    ): LlmRequest = llmRequest
 
     suspend fun execute(call: ToolCall, context: ToolContext): ToolOutput
 }
@@ -162,14 +170,27 @@ class ToolContext internal constructor(
     suspend fun loadArtifact(
         filename: String,
         version: Int? = null,
-    ): Artifact? =
-        artifactService.loadArtifact(
+    ): Artifact? {
+        val sessionScopedArtifact =
+            artifactService.loadArtifact(
+                appName = appName,
+                userId = session.userId,
+                sessionId = session.id,
+                filename = filename,
+                version = version,
+            )
+        if (sessionScopedArtifact != null) {
+            return sessionScopedArtifact
+        }
+
+        return artifactService.loadArtifact(
             appName = appName,
             userId = session.userId,
-            sessionId = session.id,
+            sessionId = null,
             filename = filename,
             version = version,
         )
+    }
 
     suspend fun listArtifacts(): List<String> =
         artifactService.listArtifactKeys(
@@ -376,6 +397,14 @@ fun agentTool(
 
 fun ToolCall.requireArgument(name: String): String =
     arguments[name]?.toString() ?: error("Missing required tool argument: $name")
+
+fun ToolCall.stringListArgument(name: String): List<String> {
+    val value = arguments[name] ?: return emptyList()
+    val listValue = value as? List<*> ?: error("Tool argument '$name' must be an array.")
+    return listValue.mapIndexed { index, item ->
+        item?.toString() ?: error("Tool argument '$name[$index]' cannot be null.")
+    }
+}
 
 internal fun effectiveInputSchema(agent: LlmAgent): ToolSchema? {
     if (agent.executionKind == AgentExecutionKind.LLM) {
