@@ -6,6 +6,7 @@ enum class AgentExecutionKind {
     LLM,
     SEQUENTIAL,
     LOOP,
+    PARALLEL,
 }
 
 data class AdkApp(
@@ -116,6 +117,7 @@ data class AdkApp(
 
 typealias SequentialAgent = LlmAgent
 typealias LoopAgent = LlmAgent
+typealias ParallelAgent = LlmAgent
 
 data class LlmAgent(
     val name: String,
@@ -172,6 +174,19 @@ data class LlmAgent(
                 require(generateContentConfig == null) { "LoopAgent '$name' cannot declare generateContentConfig." }
                 require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
                 require(tools.isEmpty()) { "LoopAgent '$name' cannot declare tools." }
+            }
+
+            AgentExecutionKind.PARALLEL -> {
+                require(model.isBlank()) { "ParallelAgent '$name' must not declare a model." }
+                require(subAgents.isNotEmpty()) { "ParallelAgent '$name' must declare at least one sub-agent." }
+                require(loopMaxIterations == null) { "ParallelAgent '$name' cannot declare loopMaxIterations." }
+                require(instruction == null) { "ParallelAgent '$name' cannot declare instruction." }
+                require(staticInstruction == null) { "ParallelAgent '$name' cannot declare staticInstruction." }
+                require(generateContentConfig == null) {
+                    "ParallelAgent '$name' cannot declare generateContentConfig."
+                }
+                require(outputSchema == null) { "ParallelAgent '$name' cannot declare outputSchema." }
+                require(tools.isEmpty()) { "ParallelAgent '$name' cannot declare tools." }
             }
         }
     }

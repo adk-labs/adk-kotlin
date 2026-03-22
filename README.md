@@ -33,7 +33,7 @@ but the API shape here follows Kotlin conventions first:
   user-defined tools.
 - File-backed session/artifact backends and a first-class memory service
   surface.
-- Sequential and loop shell agents for official-style multi-agent
+- Sequential, loop, and parallel shell agents for official-style multi-agent
   orchestration.
 
 ## Current Scope
@@ -51,7 +51,7 @@ The repository currently contains the first runnable foundation:
 - A plugin manager and global plugin callbacks integrated into `Runner`.
 - Structured tool schema support for built-in and user-defined tools.
 - Persistent file-backed session/artifact services and in-memory memory search.
-- Sequential and loop shell-agent orchestration on top of the same
+- Sequential, loop, and parallel shell-agent orchestration on top of the same
   runner/event model.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
@@ -111,6 +111,12 @@ val orchestrator: LoopAgent =
                 instruction("Work until complete, then call exit_loop.")
             }
         )
+    }
+
+val fanOut: ParallelAgent =
+    parallelAgent("fan_out") {
+        description = "Runs multiple specialists in isolated branches."
+        subAgents(greeter, app.rootAgent)
     }
 ```
 
@@ -209,6 +215,11 @@ The Kotlin runtime now follows the official ADK layering:
 4. Output schema workaround instruction when `outputSchema` and tools coexist.
 5. Transfer instructions when agent handoff is available.
 6. Loop-exit instruction when a `LoopAgent` exposes `exit_loop`.
+
+`ParallelAgent` follows the official isolated-branch shape as well: sub-agents
+run against the same starting session snapshot, and Kotlin merges their emitted
+events by completion order instead of letting sibling state leak across the
+fan-out.
 
 Structured output now follows the official split path as well:
 

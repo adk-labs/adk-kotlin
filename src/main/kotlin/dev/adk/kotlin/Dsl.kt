@@ -24,6 +24,9 @@ fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit): Sequent
 fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit): LoopAgent =
     LoopAgentDsl(name).apply(block).build()
 
+fun parallelAgent(name: String, block: ParallelAgentDsl.() -> Unit): ParallelAgent =
+    ParallelAgentDsl(name).apply(block).build()
+
 @AdkDsl
 class AppDsl internal constructor(
     private val name: String,
@@ -121,6 +124,10 @@ class LlmAgentDsl internal constructor(
         subAgents += dev.adk.kotlin.loopAgent(name, block)
     }
 
+    fun parallelAgent(name: String, block: ParallelAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.parallelAgent(name, block)
+    }
+
     internal fun build(): LlmAgent =
         LlmAgent(
             name = name,
@@ -168,6 +175,10 @@ class SequentialAgentDsl internal constructor(
         subAgents += dev.adk.kotlin.loopAgent(name, block)
     }
 
+    fun parallelAgent(name: String, block: ParallelAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.parallelAgent(name, block)
+    }
+
     fun subAgents(vararg agents: LlmAgent) {
         subAgents += agents
     }
@@ -202,6 +213,10 @@ class LoopAgentDsl internal constructor(
         subAgents += dev.adk.kotlin.loopAgent(name, block)
     }
 
+    fun parallelAgent(name: String, block: ParallelAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.parallelAgent(name, block)
+    }
+
     fun subAgents(vararg agents: LlmAgent) {
         subAgents += agents
     }
@@ -213,5 +228,42 @@ class LoopAgentDsl internal constructor(
             subAgents = subAgents.toList(),
             loopMaxIterations = maxIterations,
             executionKind = AgentExecutionKind.LOOP,
+        )
+}
+
+@AdkDsl
+class ParallelAgentDsl internal constructor(
+    private val name: String,
+) {
+    var description: String = ""
+
+    private val subAgents = mutableListOf<LlmAgent>()
+
+    fun subAgent(name: String, block: LlmAgentDsl.() -> Unit) {
+        subAgents += llmAgent(name, block)
+    }
+
+    fun sequentialAgent(name: String, block: SequentialAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.sequentialAgent(name, block)
+    }
+
+    fun loopAgent(name: String, block: LoopAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.loopAgent(name, block)
+    }
+
+    fun parallelAgent(name: String, block: ParallelAgentDsl.() -> Unit) {
+        subAgents += dev.adk.kotlin.parallelAgent(name, block)
+    }
+
+    fun subAgents(vararg agents: LlmAgent) {
+        subAgents += agents
+    }
+
+    internal fun build(): ParallelAgent =
+        LlmAgent(
+            name = name,
+            description = description.trim(),
+            subAgents = subAgents.toList(),
+            executionKind = AgentExecutionKind.PARALLEL,
         )
 }

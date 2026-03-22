@@ -1,5 +1,8 @@
 package dev.adk.kotlin
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.time.Instant
 import java.util.UUID
 
@@ -23,6 +26,14 @@ private data class ExecutionOutcome(
     val finalAgentName: String,
     val structuredResponse: Any? = null,
     val shouldEscalate: Boolean = false,
+)
+
+private data class ParallelBranchResult(
+    val outcome: ExecutionOutcome,
+    val newTranscript: List<Message>,
+    val newEvents: List<Event>,
+    val toolExecutions: List<ToolExecution>,
+    val completedAt: Instant,
 )
 
 class Runner(
@@ -186,6 +197,18 @@ class Runner(
                     invocationContext = invocationContext,
                     toolExecutions = toolExecutions,
                 )
+
+            AgentExecutionKind.PARALLEL ->
+                runParallelAgent(
+                    agent = agent,
+                    baseSession = baseSession,
+                    workingState = workingState,
+                    transcript = transcript,
+                    events = events,
+                    invocationContext = invocationContext,
+                    toolExecutions = toolExecutions,
+                    allowExitLoop = allowExitLoop,
+                )
         }
 
     private suspend fun runSequentialAgent(
@@ -258,6 +281,72 @@ class Runner(
             "LoopAgent '${agent.name}' completed without producing a meaningful outcome."
         }
     }
+
+    private suspend fun runParallelAgent(
+        agent: LlmAgent,
+        baseSession: AgentSession,
+        workingState: MutableMap<String, String>,
+        transcript: MutableList<Message>,
+        events: MutableList<Event>,
+        invocationContext: InvocationContext,
+        toolExecutions: MutableList<ToolExecution>,
+        allowExitLoop: Boolean,
+    ): ExecutionOutcome =
+        coroutineScope {
+            val baselineState = workingState.toMap()
+            val baselineTranscript = transcript.toList()
+            val baselineEvents = events.toList()
+
+            val branchResults =
+                agent.subAgents
+                    .map { subAgent ->
+                        async {
+                            val branchState = baselineState.toMutableMap()
+                            val branchTranscript = baselineTranscript.toMutableList()
+                            val branchEvents = baselineEvents.toMutableList()
+                            val branchToolExecutions = mutableListOf<ToolExecution>()
+
+                            val outcome =
+                                runAgent(
+                                    agent = subAgent,
+                                    baseSession = baseSession,
+                                    workingState = branchState,
+                                    transcript = branchTranscript,
+                                    events = branchEvents,
+                                    invocationContext = invocationContext,
+                                    toolExecutions = branchToolExecutions,
+                                    allowExitLoop = allowExitLoop,
+                                )
+
+                            ParallelBranchResult(
+                                outcome = outcome,
+                                newTranscript = branchTranscript.drop(baselineTranscript.size),
+                                newEvents = branchEvents.drop(baselineEvents.size),
+                                toolExecutions = branchToolExecutions.toList(),
+                                completedAt = Instant.now(),
+                            )
+                        }
+                    }.awaitAll()
+                    .sortedBy { it.completedAt }
+
+            var lastMeaningfulOutcome: ExecutionOutcome? = null
+            var lastEscalatingOutcome: ExecutionOutcome? = null
+
+            branchResults.forEach { branchResult ->
+                transcript += branchResult.newTranscript
+                events += branchResult.newEvents
+                toolExecutions += branchResult.toolExecutions
+
+                if (branchResult.outcome.shouldEscalate) {
+                    lastEscalatingOutcome = branchResult.outcome
+                } else {
+                    lastMeaningfulOutcome = branchResult.outcome
+                }
+            }
+
+            lastMeaningfulOutcome ?: lastEscalatingOutcome
+            ?: error("ParallelAgent '${agent.name}' must produce at least one outcome.")
+        }
 
     private suspend fun runLlmAgent(
         agent: LlmAgent,

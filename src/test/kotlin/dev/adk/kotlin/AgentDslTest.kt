@@ -156,4 +156,29 @@ class AgentDslTest {
         assertEquals(3, orchestrator.loopMaxIterations)
         assertEquals(listOf("worker"), orchestrator.subAgents.map { it.name })
     }
+
+    @Test
+    fun `builds parallel agents with official naming`() {
+        val fast =
+            agent("fast") {
+                model = "gemini-2.5-flash"
+                instruction("Produce a fast attempt.")
+            }
+
+        val slow =
+            agent("slow") {
+                model = "gemini-2.5-pro"
+                instruction("Produce a slower attempt.")
+            }
+
+        val fanOut: ParallelAgent =
+            parallelAgent("fan_out") {
+                description = "Runs workers in parallel."
+                subAgents(fast, slow)
+            }
+
+        assertEquals(AgentExecutionKind.PARALLEL, fanOut.executionKind)
+        assertEquals("", fanOut.model)
+        assertEquals(listOf("fast", "slow"), fanOut.subAgents.map { it.name })
+    }
 }

@@ -1,5 +1,6 @@
 package dev.adk.kotlin
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -859,5 +860,114 @@ class RunnerTest {
             assertEquals("worker", result.finalAgentName)
             assertEquals(Runner.EXIT_LOOP_TOOL, result.toolExecutions.last().call.toolName)
             assertEquals(true, result.events.last().actions.escalate)
+        }
+
+    @Test
+    fun `runner executes parallel agents in isolated branches and merges by completion order`() =
+        runTest {
+            val callCounts = mutableMapOf<String, Int>()
+
+            val rememberNote =
+                tool(
+                    name = "remember_note",
+                    description = "Remember a branch-local note.",
+                ) { call ->
+                    val value = call.requireArgument("value")
+                    state["note"] = value
+                    ToolOutput("remembered $value")
+                }
+
+            val fast =
+                agent("fast") {
+                    model = "gemini-2.5-flash"
+                    instruction("Produce a fast attempt.")
+                    tool(rememberNote)
+                }
+
+            val slow =
+                agent("slow") {
+                    model = "gemini-2.5-pro"
+                    instruction("Produce a slower attempt.")
+                    tool(rememberNote)
+                }
+
+            val app =
+                adkApp("parallel-app") {
+                    rootAgent(
+                        parallelAgent("fan_out") {
+                            description = "Runs workers in parallel."
+                            subAgents(fast, slow)
+                        },
+                    )
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    val count = callCounts.merge(request.agent.name, 1, Int::plus) ?: 1
+
+                    when (request.agent.name to count) {
+                        "fast" to 1 -> {
+                            assertEquals(1, request.conversation.size)
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "remember_note",
+                                        arguments = mapOf("value" to "fast"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        "fast" to 2 -> {
+                            assertEquals("fast", request.session.state["note"])
+                            ModelResponse.Final("Fast done.")
+                        }
+
+                        "slow" to 1 -> {
+                            delay(50)
+                            assertEquals(1, request.conversation.size)
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "remember_note",
+                                        arguments = mapOf("value" to "slow"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        "slow" to 2 -> {
+                            assertEquals("slow", request.session.state["note"])
+                            ModelResponse.Final("Slow done.")
+                        }
+
+                        else -> error("Unexpected model invocation for ${request.agent.name}#${count}.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Run both strategies.",
+                )
+
+            assertEquals("Slow done.", result.finalMessage)
+            assertEquals("slow", result.finalAgentName)
+            assertEquals(emptyMap(), result.session.state)
+            assertEquals(
+                listOf("user", "fast", "fast", "slow", "slow"),
+                result.events.map { it.author },
+            )
+            assertEquals(
+                listOf("remember_note", "remember_note"),
+                result.toolExecutions.map { it.call.toolName },
+            )
+            assertEquals(
+                listOf("fan_out.fast", "fan_out.fast", "fan_out.slow", "fan_out.slow"),
+                result.events.drop(1).map { it.branch },
+            )
         }
 }
