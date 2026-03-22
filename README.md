@@ -58,6 +58,8 @@ but the API shape here follows Kotlin conventions first:
 - Packaged `LoggingPlugin` for console-oriented lifecycle tracing.
 - Attachment-aware `UserMessage` input plus `SaveFilesAsArtifactsPlugin` for
   official-style upload-to-artifact flows.
+- Multimodal-style artifact propagation through `Artifact.mimeType`,
+  attachment-bearing messages, and attachment-bearing tool outputs.
 
 ## Current Scope
 
@@ -93,6 +95,8 @@ The repository currently contains the first runnable foundation:
 - Packaged console logging for runner, model, tool, and event callbacks.
 - Attachment-aware user input and packaged save-files-to-artifacts upload
   handling.
+- Attachment-aware artifact loading so tool results can carry non-text file
+  payloads forward through the transcript.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal

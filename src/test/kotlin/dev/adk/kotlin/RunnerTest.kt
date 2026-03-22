@@ -1934,7 +1934,7 @@ class RunnerTest {
                 userId = "user-1",
                 sessionId = null,
                 filename = "report.txt",
-                artifact = Artifact("Quarterly summary"),
+                artifact = Artifact("Quarterly summary", mimeType = "application/pdf"),
             )
 
             var modelCalls = 0
@@ -1967,6 +1967,9 @@ class RunnerTest {
                         2 -> {
                             assertTrue(request.session.transcript.last().text.contains("Artifact report.txt is:"))
                             assertTrue(request.session.transcript.last().text.contains("Quarterly summary"))
+                            assertEquals(1, request.session.transcript.last().attachments.size)
+                            assertEquals("report.txt", request.session.transcript.last().attachments.single().filename)
+                            assertEquals("application/pdf", request.session.transcript.last().attachments.single().mimeType)
                             ModelResponse.Final("Loaded artifact content.")
                         }
 
@@ -1991,6 +1994,8 @@ class RunnerTest {
             assertEquals("Loaded artifact content.", result.finalMessage)
             assertEquals("load_artifacts", result.toolExecutions.single().call.toolName)
             assertTrue(result.toolExecutions.single().output.content.contains("Quarterly summary"))
+            assertEquals(1, result.toolExecutions.single().output.attachments.size)
+            assertEquals("application/pdf", result.toolExecutions.single().output.attachments.single().mimeType)
         }
 
     @Test
@@ -2307,6 +2312,7 @@ class RunnerTest {
                                     MessageAttachment(
                                         filename = "notes.txt",
                                         content = "Quarterly plan",
+                                        mimeType = "application/pdf",
                                     ),
                                 ),
                         ),
@@ -2316,6 +2322,10 @@ class RunnerTest {
             assertEquals(
                 "Quarterly plan",
                 artifactService.loadArtifact("upload-app", "user-1", "session-1", "notes.txt")?.content,
+            )
+            assertEquals(
+                "application/pdf",
+                artifactService.loadArtifact("upload-app", "user-1", "session-1", "notes.txt")?.mimeType,
             )
             assertEquals(
                 mapOf("notes.txt" to 0),

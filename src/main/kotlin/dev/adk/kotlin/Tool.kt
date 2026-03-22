@@ -21,6 +21,7 @@ data class ToolDefinition(
 
 data class ToolOutput(
     val content: String,
+    val attachments: List<MessageAttachment> = emptyList(),
     val metadata: Map<String, String> = emptyMap(),
     val skipSummarization: Boolean = false,
 ) {

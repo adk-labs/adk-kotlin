@@ -169,14 +169,34 @@ class LoadArtifactsTool : Tool {
             artifactNames.map { artifactName ->
                 val artifact = context.loadArtifact(artifactName)
                 if (artifact == null) {
+                    artifactName to null
+                } else {
+                    artifactName to artifact
+                }
+            }
+
+        val artifactText =
+            renderedArtifacts.joinToString("\n\n") { (artifactName, artifact) ->
+                if (artifact == null) {
                     "Artifact $artifactName was not found."
                 } else {
                     "Artifact $artifactName is:\n${artifact.content}"
                 }
             }
+        val attachments =
+            renderedArtifacts.mapNotNull { (artifactName, artifact) ->
+                artifact?.let {
+                    MessageAttachment(
+                        filename = artifactName,
+                        content = it.content,
+                        mimeType = it.mimeType,
+                    )
+                }
+            }
 
         return ToolOutput(
-            content = renderedArtifacts.joinToString("\n\n"),
+            content = artifactText,
+            attachments = attachments,
             skipSummarization = true,
         )
     }

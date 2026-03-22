@@ -670,7 +670,12 @@ class Runner(
                                     Event(
                                         invocationId = invocationContext.invocationId,
                                         author = agent.name,
-                                        content = ToolMessage(toolName = call.toolName, text = finalToolOutput.content),
+                                        content =
+                                            ToolMessage(
+                                                toolName = call.toolName,
+                                                text = finalToolOutput.content,
+                                                attachments = finalToolOutput.attachments,
+                                            ),
                                         actions =
                                             EventActions(
                                                 skipSummarization = finalToolOutput.skipSummarization.takeIf { it },
@@ -689,10 +694,7 @@ class Runner(
                                 agentName = agent.name,
                                 call = call,
                                 output =
-                                    ToolOutput(
-                                        content = emittedEvent.content?.text.orEmpty(),
-                                        metadata = finalToolOutput.metadata,
-                                    ),
+                                    finalToolOutput.copy(content = emittedEvent.content?.text.orEmpty()),
                             )
                     }
                 }

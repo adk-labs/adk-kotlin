@@ -24,12 +24,13 @@ data class MessageAttachment(
 sealed interface Message : Serializable {
     val role: MessageRole
     val text: String
+    val attachments: List<MessageAttachment>
     val timestamp: Instant
 }
 
 data class UserMessage(
     override val text: String,
-    val attachments: List<MessageAttachment> = emptyList(),
+    override val attachments: List<MessageAttachment> = emptyList(),
     val artifactDelta: Map<String, Int> = emptyMap(),
     override val timestamp: Instant = Instant.now(),
 ) : Message {
@@ -38,6 +39,7 @@ data class UserMessage(
 
 data class ModelMessage(
     override val text: String,
+    override val attachments: List<MessageAttachment> = emptyList(),
     override val timestamp: Instant = Instant.now(),
 ) : Message {
     override val role: MessageRole = MessageRole.MODEL
@@ -46,6 +48,7 @@ data class ModelMessage(
 data class ToolMessage(
     val toolName: String,
     override val text: String,
+    override val attachments: List<MessageAttachment> = emptyList(),
     override val timestamp: Instant = Instant.now(),
 ) : Message {
     override val role: MessageRole = MessageRole.TOOL

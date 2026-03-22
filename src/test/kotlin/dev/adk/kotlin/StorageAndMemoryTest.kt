@@ -20,13 +20,35 @@ class StorageAndMemoryTest {
                     id = "session-1",
                     userId = "user-1",
                     state = mapOf("user:name" to "Alice"),
-                    transcript = listOf(UserMessage("Hello")),
+                    transcript =
+                        listOf(
+                            UserMessage(
+                                "Hello",
+                                attachments =
+                                    listOf(
+                                        MessageAttachment(
+                                            filename = "hello.txt",
+                                            content = "Greeting",
+                                        ),
+                                    ),
+                            ),
+                        ),
                     events =
                         listOf(
                             Event(
                                 invocationId = "inv-1",
                                 author = "user",
-                                content = UserMessage("Hello"),
+                                content =
+                                    UserMessage(
+                                        "Hello",
+                                        attachments =
+                                            listOf(
+                                                MessageAttachment(
+                                                    filename = "hello.txt",
+                                                    content = "Greeting",
+                                                ),
+                                            ),
+                                    ),
                             ),
                         ),
                 )
@@ -54,7 +76,7 @@ class StorageAndMemoryTest {
                 appName = "travel-app",
                 userId = "user-1",
                 filename = "shared.txt",
-                artifact = Artifact("Shared context"),
+                artifact = Artifact("Shared context", mimeType = "text/markdown"),
             )
             service.saveArtifact(
                 appName = "travel-app",
@@ -92,6 +114,14 @@ class StorageAndMemoryTest {
                     sessionId = "session-1",
                     filename = "notes.txt",
                 ),
+            )
+            assertEquals(
+                "text/markdown",
+                service.loadArtifact(
+                    appName = "travel-app",
+                    userId = "user-1",
+                    filename = "shared.txt",
+                )?.mimeType,
             )
 
             service.deleteArtifact(

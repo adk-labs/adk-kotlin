@@ -34,7 +34,11 @@ class SaveFilesAsArtifactsPlugin(
                     userId = invocationContext.userId,
                     sessionId = sessionId,
                     filename = artifactName,
-                    artifact = Artifact(content = attachment.content),
+                    artifact =
+                        Artifact(
+                            content = attachment.content,
+                            mimeType = attachment.mimeType,
+                        ),
                 )
             artifactDelta[artifactName] = version
             placeholders += "[Uploaded Artifact: \"$displayName\"]"

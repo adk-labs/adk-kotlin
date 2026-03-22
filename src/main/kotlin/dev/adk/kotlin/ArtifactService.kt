@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class Artifact(
     val content: String,
+    val mimeType: String = "text/plain",
     val version: Int = 0,
 ) : Serializable {
     override fun toString(): String = content
