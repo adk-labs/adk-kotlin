@@ -9,23 +9,38 @@ internal object PromptAssembler {
             "any other tools needed to complete the task, always call set_model_response with " +
             "your final answer in the specified schema format."
 
-    fun createRequest(
+    suspend fun createRequest(
         app: AdkApp,
         agent: LlmAgent,
         session: AgentSession,
         transcript: List<Message>,
+        artifactService: ArtifactService? = null,
         includeOutputSchemaWorkaround: Boolean = false,
     ): ModelRequest {
         val systemInstructions = mutableListOf<String>()
 
         app.globalInstruction
-            ?.let { resolveInstruction(it, session.state) }
+            ?.let {
+                resolveInstruction(
+                    instruction = it,
+                    appName = app.name,
+                    session = session,
+                    artifactService = artifactService,
+                )
+            }
             ?.takeIf { it.isNotEmpty() }
             ?.let(systemInstructions::add)
 
         val dynamicInstruction =
             agent.instruction
-                ?.let { resolveInstruction(it, session.state) }
+                ?.let {
+                    resolveInstruction(
+                        instruction = it,
+                        appName = app.name,
+                        session = session,
+                        artifactService = artifactService,
+                    )
+                }
                 ?.takeIf { it.isNotEmpty() }
 
         agent.staticInstruction
@@ -68,20 +83,29 @@ internal object PromptAssembler {
         )
     }
 
-    internal fun resolveInstruction(
+    internal suspend fun resolveInstruction(
         instruction: InstructionTemplate,
-        state: Map<String, String>,
+        appName: String,
+        session: AgentSession,
+        artifactService: ArtifactService?,
     ): String {
         if (instruction.bypassStateInjection) {
             return instruction.text
         }
 
-        return injectSessionState(instruction.text, state)
+        return injectPromptData(
+            template = instruction.text,
+            appName = appName,
+            session = session,
+            artifactService = artifactService,
+        )
     }
 
-    internal fun injectSessionState(
+    internal suspend fun injectPromptData(
         template: String,
-        state: Map<String, String>,
+        appName: String,
+        session: AgentSession,
+        artifactService: ArtifactService?,
     ): String {
         if (template.isEmpty()) {
             return template
@@ -95,9 +119,9 @@ internal object PromptAssembler {
         val resolved = StringBuilder()
         var lastEnd = 0
 
-        matches.forEach { match ->
+        for (match in matches) {
             resolved.append(template.substring(lastEnd, match.range.first))
-            resolved.append(resolveMatch(match.value, state))
+            resolved.append(resolveMatch(match.value, appName, session, artifactService))
             lastEnd = match.range.last + 1
         }
 
@@ -160,9 +184,11 @@ internal object PromptAssembler {
         return instruction.toString()
     }
 
-    private fun resolveMatch(
+    private suspend fun resolveMatch(
         placeholder: String,
-        state: Map<String, String>,
+        appName: String,
+        session: AgentSession,
+        artifactService: ArtifactService?,
     ): String {
         var variableName =
             placeholder
@@ -176,14 +202,28 @@ internal object PromptAssembler {
         }
 
         if (variableName.startsWith("artifact.")) {
-            error("Artifact-backed instruction injection is not implemented yet.")
+            val artifactName = variableName.removePrefix("artifact.")
+            val service = artifactService ?: error("Artifact service is not initialized.")
+            val artifact =
+                service.loadArtifact(
+                    appName = appName,
+                    userId = session.userId,
+                    sessionId = session.id,
+                    filename = artifactName,
+                )
+
+            return when {
+                artifact != null -> artifact.toString()
+                optional -> ""
+                else -> error("Artifact $artifactName not found.")
+            }
         }
 
         if (!isValidStateName(variableName)) {
             return placeholder
         }
 
-        val value = state[variableName]
+        val value = session.state[variableName]
         return when {
             value != null -> value
             optional -> ""

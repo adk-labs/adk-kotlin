@@ -20,6 +20,7 @@ class Runner(
     private val app: AdkApp,
     private val model: LanguageModel,
     private val sessionStore: SessionStore = InMemorySessionStore(),
+    val artifactService: ArtifactService = InMemoryArtifactService(),
 ) {
     internal companion object {
         const val TRANSFER_TO_AGENT_TOOL = "transfer_to_agent"
@@ -56,6 +57,7 @@ class Runner(
                         agent = activeAgent,
                         session = workingSession,
                         transcript = transcript,
+                        artifactService = artifactService,
                         includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(activeAgent),
                     ),
                 )

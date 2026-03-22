@@ -14,6 +14,8 @@ but the API shape here follows Kotlin conventions first:
   session-state injection, and transfer instructions.
 - Output schema workaround alignment via the internal `set_model_response`
   tool when agents use tools and structured final output together.
+- Artifact-aware instruction interpolation via `{artifact.filename}` with an
+  in-memory artifact service wired by default in `Runner`.
 
 ## Current Scope
 
@@ -23,6 +25,8 @@ The repository currently contains the first runnable foundation:
 - `adkApp {}` and `rootAgent {}` DSL entry points.
 - A `Runner` that supports a model/tool loop and agent handoff.
 - An in-memory `SessionStore`.
+- A default in-memory `ArtifactService` for official-style instruction
+  interpolation.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -58,6 +62,29 @@ val app = adkApp("travel-assistant") {
 }
 ```
 
+Artifact-backed instructions use the same interpolation path:
+
+```kotlin
+val artifactService = InMemoryArtifactService()
+artifactService.saveArtifact(
+    appName = "travel-assistant",
+    userId = "user-1",
+    sessionId = "session-1",
+    filename = "knowledge.txt",
+    artifact = Artifact("Seoul neighborhoods summary"),
+)
+
+val runner = Runner(
+    app = app,
+    model = model,
+    artifactService = artifactService,
+)
+```
+
+With that runner, instructions such as
+`globalInstruction("Use this context: {artifact.knowledge.txt}")` are resolved
+through the artifact service before the model call.
+
 The system instruction passed to the model is not improvised from that DSL.
 The Kotlin runtime now follows the official ADK layering:
 
@@ -72,4 +99,4 @@ The Kotlin runtime now follows the official ADK layering:
 - Introduce provider modules instead of baking model transports into core.
 - Add richer tool schemas, streaming, and persistent session backends.
 - Align more of the official runtime surface, including artifact-aware
-  instructions and provider-native structured output capabilities.
+  provider-native structured output capabilities.

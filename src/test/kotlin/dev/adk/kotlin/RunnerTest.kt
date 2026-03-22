@@ -237,4 +237,47 @@ class RunnerTest {
             )
             assertEquals(Runner.SET_MODEL_RESPONSE_TOOL, result.toolExecutions.last().call.toolName)
         }
+
+    @Test
+    fun `runner resolves artifact placeholders through its artifact service`() =
+        runTest {
+            val artifactService = InMemoryArtifactService()
+            artifactService.saveArtifact(
+                appName = "knowledge-app",
+                userId = "user-1",
+                sessionId = "session-1",
+                filename = "knowledge.txt",
+                artifact = Artifact("This is my artifact content."),
+            )
+
+            val app =
+                adkApp("knowledge-app") {
+                    globalInstruction("Knowledge: {artifact.knowledge.txt}")
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertTrue(
+                        request.systemInstruction
+                            .orEmpty()
+                            .contains("Knowledge: This is my artifact content."),
+                    )
+                    ModelResponse.Final("Used artifact-backed instructions.")
+                }
+
+            val runner = Runner(app = app, model = fakeModel, artifactService = artifactService)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use the knowledge.",
+                )
+
+            assertEquals("Used artifact-backed instructions.", result.finalMessage)
+            assertEquals("planner", result.finalAgentName)
+        }
 }
