@@ -61,6 +61,11 @@ class PromptAssemblerTest {
             val transferTool = request.availableTools.firstOrNull { it.name == Runner.TRANSFER_TO_AGENT_TOOL }
             assertNotNull(transferTool)
             assertEquals(listOf("researcher"), transferTool.parameters.single().allowedValues)
+            assertEquals(ToolSchemaType.OBJECT, transferTool.effectiveJsonSchema?.type)
+            assertEquals(
+                listOf("researcher"),
+                transferTool.effectiveJsonSchema?.properties?.getValue("agent_name")?.enumValues,
+            )
         }
 
     @Test
@@ -139,6 +144,8 @@ class PromptAssemblerTest {
             val setModelResponseTool = request.availableTools.firstOrNull { it.name == Runner.SET_MODEL_RESPONSE_TOOL }
             assertNotNull(setModelResponseTool)
             assertEquals(listOf("city", "summary"), setModelResponseTool.parameters.map { it.name })
+            assertEquals(ToolSchemaType.OBJECT, setModelResponseTool.effectiveJsonSchema?.type)
+            assertEquals(listOf("city", "summary"), setModelResponseTool.effectiveJsonSchema?.required)
             assertEquals(null, request.outputSchema)
             assertEquals(null, request.responseMimeType)
         }

@@ -29,6 +29,8 @@ but the API shape here follows Kotlin conventions first:
   transfer, and completion deltas.
 - Official-style plugin lifecycle hooks around user input, model calls, tool
   execution, event emission, and run completion.
+- Structured tool schemas and richer declaration metadata for internal and
+  user-defined tools.
 
 ## Current Scope
 
@@ -43,6 +45,7 @@ The repository currently contains the first runnable foundation:
 - A provider-ready model foundation instead of a single raw callback surface.
 - First-class runtime events persisted on sessions and returned from runs.
 - A plugin manager and global plugin callbacks integrated into `Runner`.
+- Structured tool schema support for built-in and user-defined tools.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -156,8 +159,13 @@ val persistKnowledge =
     tool(
         name = "persist_knowledge",
         description = "Save reusable context as an artifact.",
-    ) {
-        saveArtifact("knowledge.txt", Artifact("Seoul neighborhoods summary"))
+        jsonSchema =
+            toolSchema {
+                string("content", description = "Knowledge content to persist")
+            },
+        requiresConfirmation = false,
+    ) { call ->
+        saveArtifact("knowledge.txt", Artifact(call.requireArgument("content")))
         ToolOutput("saved")
     }
 ```
@@ -186,6 +194,7 @@ Structured output now follows the official split path as well:
 
 - Introduce provider modules instead of baking model transports into core.
 - Add richer plugin behaviors such as request mutation and built-in plugins.
-- Add richer tool schemas and persistent session backends.
+- Add richer tool runtime semantics such as confirmations and toolsets.
+- Add persistent session backends.
 - Align more of the official runtime surface, including broader tool/runtime
   schemas and storage modules.

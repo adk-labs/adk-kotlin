@@ -11,13 +11,40 @@ data class ToolDefinition(
     val name: String,
     val description: String,
     val inputSchema: String? = null,
+    val jsonSchema: ToolSchema? = null,
     val parameters: List<ToolParameter> = emptyList(),
+    val isLongRunning: Boolean = false,
+    val requiresConfirmation: Boolean = false,
+    val customMetadata: Map<String, Any?> = emptyMap(),
 )
 
 data class ToolOutput(
     val content: String,
     val metadata: Map<String, String> = emptyMap(),
-)
+) {
+    val text: String
+        get() = content
+}
+
+val ToolDefinition.effectiveJsonSchema: ToolSchema?
+    get() = jsonSchema ?: parameters.toToolSchema()
+
+fun List<ToolParameter>.toToolSchema(): ToolSchema? {
+    if (isEmpty()) {
+        return null
+    }
+
+    return toolSchema {
+        this@toToolSchema.forEach { parameter ->
+            string(
+                name = parameter.name,
+                description = parameter.description,
+                required = parameter.required,
+                enumValues = parameter.allowedValues,
+            )
+        }
+    }
+}
 
 interface Tool {
     val definition: ToolDefinition
@@ -100,7 +127,11 @@ fun tool(
     name: String,
     description: String,
     inputSchema: String? = null,
+    jsonSchema: ToolSchema? = null,
     parameters: List<ToolParameter> = emptyList(),
+    isLongRunning: Boolean = false,
+    requiresConfirmation: Boolean = false,
+    customMetadata: Map<String, Any?> = emptyMap(),
     block: suspend ToolContext.(ToolCall) -> ToolOutput,
 ): Tool =
     LambdaTool(
@@ -108,7 +139,11 @@ fun tool(
             name = name,
             description = description,
             inputSchema = inputSchema,
+            jsonSchema = jsonSchema,
             parameters = parameters,
+            isLongRunning = isLongRunning,
+            requiresConfirmation = requiresConfirmation,
+            customMetadata = customMetadata,
         ),
         block = block,
     )

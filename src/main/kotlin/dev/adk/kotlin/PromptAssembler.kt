@@ -292,6 +292,7 @@ internal object PromptAssembler {
                         "Set your final response using the required output schema. " +
                             "After using any other tools needed to complete the task, always call " +
                             "set_model_response with your final answer in the specified schema format.",
+                    jsonSchema = outputSchema.toToolSchema(),
                     parameters = outputSchema.fields,
                 )
         }
@@ -310,6 +311,14 @@ internal object PromptAssembler {
                         Args:
                           agent_name: the agent name to transfer to.
                         """.trimIndent(),
+                    jsonSchema =
+                        toolSchema {
+                            string(
+                                name = "agent_name",
+                                description = "The agent name to transfer to.",
+                                enumValues = transferTargets.map { it.name }.sorted(),
+                            )
+                        },
                     parameters =
                         listOf(
                             ToolParameter(
@@ -346,4 +355,16 @@ internal object PromptAssembler {
         mutableConversation.add(insertIndex, UserMessage(instruction))
         return mutableConversation.toList()
     }
+
+    private fun OutputSchema.toToolSchema(): ToolSchema =
+        toolSchema {
+            fields.forEach { field ->
+                string(
+                    name = field.name,
+                    description = field.description,
+                    required = field.required,
+                    enumValues = field.allowedValues,
+                )
+            }
+        }
 }
