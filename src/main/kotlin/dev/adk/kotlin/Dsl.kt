@@ -78,6 +78,7 @@ class LlmAgentDsl internal constructor(
     private val subAgents = mutableListOf<LlmAgent>()
     private var instructionBypassesStateInjection: Boolean = false
     private var staticInstructionText: String? = null
+    private var inputSchema: ToolSchema? = null
     private var outputSchema: OutputSchema? = null
 
     fun instruction(
@@ -101,6 +102,10 @@ class LlmAgentDsl internal constructor(
 
     fun outputSchema(block: OutputSchemaDsl.() -> Unit) {
         outputSchema = OutputSchemaDsl().apply(block).build()
+    }
+
+    fun inputSchema(block: ToolSchemaBuilder.() -> Unit) {
+        inputSchema = toolSchema(block)
     }
 
     fun planner(planner: BasePlanner) {
@@ -153,6 +158,7 @@ class LlmAgentDsl internal constructor(
             staticInstruction = staticInstructionText,
             generateContentConfig = generateContentConfig,
             includeContents = includeContents,
+            inputSchema = inputSchema,
             outputSchema = outputSchema,
             outputKey = outputKey?.trim()?.takeIf { it.isNotEmpty() },
             planner = planner,

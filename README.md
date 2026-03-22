@@ -38,6 +38,7 @@ but the API shape here follows Kotlin conventions first:
 - Planner foundations with `BuiltInPlanner` thinking-config override and
   `PlanReActPlanner` instruction injection.
 - Controlled I/O semantics with `includeContents` and `outputKey`.
+- Agent-as-tool support with `inputSchema` and `AgentTool`.
 
 ## Current Scope
 
@@ -58,6 +59,7 @@ The repository currently contains the first runnable foundation:
   runner/event model.
 - Planner support for model-native thinking and NL plan/react prompting.
 - Controlled transcript inclusion and session-state output persistence.
+- Wrapped-agent tool execution with schema-derived tool declarations.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -146,6 +148,18 @@ val focusedExtractor: Agent =
         includeContents = IncludeContents.NONE
         outputKey = "extracted_summary"
     }
+
+val researcherTool: Tool =
+    agentTool(
+        agent("researcher") {
+            model = "gemini-2.5-flash"
+            description = "Research specialist."
+            inputSchema {
+                string("topic", description = "Topic to research")
+            }
+            outputKey = "last_topic_summary"
+        },
+    )
 ```
 
 Provider modules can now plug in through `BaseLlm` and `LlmRegistry`:
@@ -261,6 +275,13 @@ Controlled I/O semantics now align with the official agent surface as well:
   the model instead of the full transcript.
 - `outputKey = "..."` writes the final agent output back into session state for
   downstream agents and tools.
+
+`AgentTool` is now available as a first-class wrapper:
+
+- Tool input schema comes from the wrapped agent's `inputSchema`, or falls back
+  to a default `request: string` input.
+- Wrapped agent runs use an isolated in-memory child runner and forward state
+  deltas back into the parent tool context.
 
 Structured output now follows the official split path as well:
 

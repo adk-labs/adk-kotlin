@@ -132,6 +132,7 @@ data class LlmAgent(
     val staticInstruction: String? = null,
     val generateContentConfig: GenerateContentConfig? = null,
     val includeContents: IncludeContents = IncludeContents.DEFAULT,
+    val inputSchema: ToolSchema? = null,
     val outputSchema: OutputSchema? = null,
     val outputKey: String? = null,
     val planner: BasePlanner? = null,
@@ -170,6 +171,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "SequentialAgent '$name' cannot declare includeContents."
                 }
+                require(inputSchema == null) { "SequentialAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "SequentialAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "SequentialAgent '$name' cannot declare planner." }
@@ -188,6 +190,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "LoopAgent '$name' cannot declare includeContents."
                 }
+                require(inputSchema == null) { "LoopAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "LoopAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "LoopAgent '$name' cannot declare planner." }
@@ -206,6 +209,7 @@ data class LlmAgent(
                 require(includeContents == IncludeContents.DEFAULT) {
                     "ParallelAgent '$name' cannot declare includeContents."
                 }
+                require(inputSchema == null) { "ParallelAgent '$name' cannot declare inputSchema." }
                 require(outputSchema == null) { "ParallelAgent '$name' cannot declare outputSchema." }
                 require(outputKey == null) { "ParallelAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "ParallelAgent '$name' cannot declare planner." }

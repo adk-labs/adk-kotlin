@@ -18,6 +18,8 @@ class PluginManager(
 
     fun getPlugin(pluginName: String): Plugin? = plugins.firstOrNull { it.name == pluginName }
 
+    fun snapshotPlugins(): List<Plugin> = plugins.toList()
+
     suspend fun runOnUserMessageCallback(
         invocationContext: InvocationContext,
         userMessage: UserMessage,

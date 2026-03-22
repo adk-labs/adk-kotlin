@@ -1089,4 +1089,77 @@ class RunnerTest {
             assertEquals("Persist me.", result.session.state["planner_output"])
             assertEquals("Persist me.", result.events.last().actions.agentState?.get("planner_output"))
         }
+
+    @Test
+    fun `runner executes wrapped agent tools with schema and state forwarding`() =
+        runTest {
+            val callCounts = mutableMapOf<String, Int>()
+
+            val researcher =
+                agent("researcher") {
+                    model = "gemini-2.5-flash"
+                    description = "Research specialist."
+                    inputSchema {
+                        string("topic", description = "Topic to research")
+                    }
+                    outputKey = "last_topic_summary"
+                }
+
+            val app =
+                adkApp("research-app") {
+                    rootAgent("coordinator") {
+                        model = "gemini-2.5-pro"
+                        tool(agentTool(researcher))
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    val count = callCounts.merge(request.agent.name, 1, Int::plus) ?: 1
+
+                    when (request.agent.name to count) {
+                        "coordinator" to 1 -> {
+                            val wrappedTool = request.availableTools.single()
+                            assertEquals("researcher", wrappedTool.name)
+                            assertEquals(ToolSchemaType.OBJECT, wrappedTool.effectiveJsonSchema?.type)
+                            assertEquals(listOf("topic"), wrappedTool.effectiveJsonSchema?.required)
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "researcher",
+                                        arguments = mapOf("topic" to "Seoul"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        "researcher" to 1 -> {
+                            assertEquals("""{"topic":"Seoul"}""", request.conversation.single().text)
+                            ModelResponse.Final("Research summary.")
+                        }
+
+                        "coordinator" to 2 -> {
+                            assertEquals("Research summary.", request.session.transcript.last().text)
+                            assertEquals("Research summary.", request.session.state["last_topic_summary"])
+                            ModelResponse.Final("Coordinator done.")
+                        }
+
+                        else -> error("Unexpected model invocation for ${request.agent.name}#${count}.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Research Seoul.",
+                )
+
+            assertEquals("Coordinator done.", result.finalMessage)
+            assertEquals("Research summary.", result.session.state["last_topic_summary"])
+            assertEquals("researcher", result.toolExecutions.single().call.toolName)
+            assertEquals("Research summary.", result.toolExecutions.single().output.content)
+        }
 }

@@ -21,6 +21,7 @@ data class ToolDefinition(
 data class ToolOutput(
     val content: String,
     val metadata: Map<String, String> = emptyMap(),
+    val skipSummarization: Boolean = false,
 ) {
     val text: String
         get() = content
@@ -61,6 +62,7 @@ class ToolContext internal constructor(
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
+    private val agentToolExecutor: suspend (ToolContext, LlmAgent, Map<String, Any?>, Boolean, Boolean) -> ToolOutput,
 ) {
     private val artifactDelta = linkedMapOf<String, Int>()
 
@@ -123,6 +125,13 @@ class ToolContext internal constructor(
         )
     }
 
+    suspend fun runAgentTool(
+        agent: LlmAgent,
+        arguments: Map<String, Any?>,
+        skipSummarization: Boolean = false,
+        includePlugins: Boolean = true,
+    ): ToolOutput = agentToolExecutor(this, agent, arguments, skipSummarization, includePlugins)
+
     internal fun recordedArtifactDelta(): Map<String, Int> = artifactDelta.toMap()
 }
 
@@ -131,6 +140,31 @@ private class LambdaTool(
     private val block: suspend ToolContext.(ToolCall) -> ToolOutput,
 ) : Tool {
     override suspend fun execute(call: ToolCall, context: ToolContext): ToolOutput = context.block(call)
+}
+
+class AgentTool(
+    val agent: LlmAgent,
+    val skipSummarization: Boolean = false,
+    val includePlugins: Boolean = true,
+) : Tool {
+    override val definition: ToolDefinition =
+        ToolDefinition(
+            name = agent.name,
+            description = agent.description,
+            jsonSchema = effectiveInputSchema(agent),
+            parameters = effectiveInputSchema(agent)?.toToolParameters().orEmpty(),
+        )
+
+    override suspend fun execute(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolOutput =
+        context.runAgentTool(
+            agent = agent,
+            arguments = call.arguments,
+            skipSummarization = skipSummarization,
+            includePlugins = includePlugins,
+        )
 }
 
 fun tool(
@@ -158,5 +192,87 @@ fun tool(
         block = block,
     )
 
+fun agentTool(
+    agent: LlmAgent,
+    skipSummarization: Boolean = false,
+    includePlugins: Boolean = true,
+): Tool = AgentTool(agent = agent, skipSummarization = skipSummarization, includePlugins = includePlugins)
+
 fun ToolCall.requireArgument(name: String): String =
     arguments[name]?.toString() ?: error("Missing required tool argument: $name")
+
+internal fun effectiveInputSchema(agent: LlmAgent): ToolSchema? {
+    if (agent.executionKind == AgentExecutionKind.LLM) {
+        return agent.inputSchema
+    }
+
+    return agent.subAgents.firstOrNull()?.let(::effectiveInputSchema)
+}
+
+internal fun effectiveOutputSchema(agent: LlmAgent): OutputSchema? {
+    if (agent.executionKind == AgentExecutionKind.LLM) {
+        return agent.outputSchema
+    }
+
+    return agent.subAgents.lastOrNull()?.let(::effectiveOutputSchema)
+}
+
+internal fun ToolSchema.toToolParameters(): List<ToolParameter> =
+    properties.map { (name, schema) ->
+        ToolParameter(
+            name = name,
+            description = schema.description,
+            allowedValues = schema.enumValues,
+            required = name in required,
+        )
+    }
+
+internal fun agentToolInputText(
+    agent: LlmAgent,
+    arguments: Map<String, Any?>,
+): String {
+    val inputSchema = effectiveInputSchema(agent)
+    return if (inputSchema != null) {
+        serializeJsonValue(inputSchema.validateArguments(arguments))
+    } else {
+        arguments["request"]?.toString() ?: error("Missing required tool argument: request")
+    }
+}
+
+private fun serializeJsonValue(value: Any?): String =
+    when (value) {
+        null -> "null"
+        is String -> buildString {
+            append('"')
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
+                }
+            }
+            append('"')
+        }
+
+        is Number, is Boolean -> value.toString()
+        is Map<*, *> ->
+            value.entries.joinToString(
+                prefix = "{",
+                postfix = "}",
+                separator = ",",
+            ) { (key, nestedValue) ->
+                "${serializeJsonValue(key.toString())}:${serializeJsonValue(nestedValue)}"
+            }
+        is List<*> ->
+            value.joinToString(
+                prefix = "[",
+                postfix = "]",
+                separator = ",",
+            ) { item ->
+                serializeJsonValue(item)
+            }
+        else -> serializeJsonValue(value.toString())
+    }

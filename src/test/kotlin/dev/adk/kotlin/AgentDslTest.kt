@@ -192,12 +192,17 @@ class AgentDslTest {
                     model = "gemini-2.5-pro"
                     this.planner = planner
                     includeContents = IncludeContents.NONE
+                    inputSchema {
+                        string("topic", description = "Topic to analyze")
+                    }
                     outputKey = "planner_output"
                 }
             }
 
         assertEquals(planner, app.rootAgent.planner)
         assertEquals(IncludeContents.NONE, app.rootAgent.includeContents)
+        assertEquals(ToolSchemaType.OBJECT, app.rootAgent.inputSchema?.type)
+        assertEquals(listOf("topic"), app.rootAgent.inputSchema?.required)
         assertEquals("planner_output", app.rootAgent.outputKey)
     }
 }

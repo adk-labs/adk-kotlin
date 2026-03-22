@@ -579,6 +579,15 @@ class Runner(
                                 workingState = workingState,
                                 artifactService = artifactService,
                                 memoryService = memoryService,
+                                agentToolExecutor = { toolContext, toolAgent, arguments, skipSummarization, includePlugins ->
+                                    executeAgentTool(
+                                        toolContext = toolContext,
+                                        toolAgent = toolAgent,
+                                        arguments = arguments,
+                                        skipSummarization = skipSummarization,
+                                        includePlugins = includePlugins,
+                                    )
+                                },
                             )
                         val stateBeforeTool = workingState.toMap()
                         val beforeToolOutput = pluginManager.runBeforeToolCallback(tool, call, context)
@@ -606,6 +615,7 @@ class Runner(
                                         content = ToolMessage(toolName = call.toolName, text = finalToolOutput.content),
                                         actions =
                                             EventActions(
+                                                skipSummarization = finalToolOutput.skipSummarization.takeIf { it },
                                                 stateDelta = computeStateDelta(stateBeforeTool, workingState),
                                                 artifactDelta = context.recordedArtifactDelta(),
                                             ),
@@ -729,6 +739,54 @@ class Runner(
         agent.outputKey?.takeIf { it.isNotBlank() }?.let { outputKey ->
             workingState[outputKey] = finalMessage
         }
+    }
+
+    private suspend fun executeAgentTool(
+        toolContext: ToolContext,
+        toolAgent: LlmAgent,
+        arguments: Map<String, Any?>,
+        skipSummarization: Boolean,
+        includePlugins: Boolean,
+    ): ToolOutput {
+        val childSessionStore = InMemorySessionStore()
+        val childSession =
+            AgentSession(
+                id = toolContext.session.id,
+                userId = toolContext.session.userId,
+                state = toolContext.snapshot(),
+            )
+        childSessionStore.save(toolContext.appName, childSession)
+
+        val childRunner =
+            Runner(
+                app =
+                    AdkApp(
+                        name = toolContext.appName,
+                        rootAgent = toolAgent,
+                    ),
+                model = model,
+                sessionStore = childSessionStore,
+                artifactService = artifactService,
+                plugins = if (includePlugins) pluginManager.snapshotPlugins() else emptyList(),
+                memoryService = memoryService,
+            )
+
+        val result =
+            childRunner.run(
+                userId = toolContext.session.userId,
+                sessionId = toolContext.session.id,
+                input = agentToolInputText(toolAgent, arguments),
+            )
+
+        computeStateDelta(childSession.state, result.session.state).forEach { (key, value) ->
+            toolContext.remember(key, value)
+        }
+
+        val outputText = result.structuredResponse?.toString() ?: result.finalMessage
+        return ToolOutput(
+            content = outputText,
+            skipSummarization = skipSummarization,
+        )
     }
 
     private fun computeStateDelta(
