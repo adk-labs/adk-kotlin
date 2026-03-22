@@ -18,6 +18,7 @@ internal object PromptAssembler {
         includeOutputSchemaWorkaround: Boolean = false,
     ): ModelRequest {
         val systemInstructions = mutableListOf<String>()
+        val nativeOutputSchema = nativeOutputSchema(agent, includeOutputSchemaWorkaround)
 
         app.globalInstruction
             ?.let {
@@ -80,6 +81,13 @@ internal object PromptAssembler {
                     transferTargets = transferTargets,
                     includeOutputSchemaWorkaround = includeOutputSchemaWorkaround,
                 ),
+            outputSchema = nativeOutputSchema,
+            responseMimeType =
+                if (nativeOutputSchema != null) {
+                    ModelRequest.JSON_RESPONSE_MIME_TYPE
+                } else {
+                    null
+                },
         )
     }
 
@@ -251,6 +259,11 @@ internal object PromptAssembler {
 
         return value.drop(1).all(Char::isJavaIdentifierPart)
     }
+
+    private fun nativeOutputSchema(
+        agent: LlmAgent,
+        includeOutputSchemaWorkaround: Boolean,
+    ): OutputSchema? = agent.outputSchema.takeUnless { includeOutputSchemaWorkaround }
 
     private fun buildAvailableTools(
         agent: LlmAgent,

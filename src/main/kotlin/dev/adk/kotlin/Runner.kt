@@ -64,7 +64,16 @@ class Runner(
 
             when (response) {
                 is ModelResponse.Final -> {
-                    transcript = transcript + ModelMessage(response.message)
+                    val structuredResponse =
+                        validateStructuredResponse(
+                            agent = activeAgent,
+                            structuredResponse = response.structuredResponse,
+                        )
+                    val finalMessage =
+                        response.message.ifBlank {
+                            structuredResponse?.toString().orEmpty()
+                        }
+                    transcript = transcript + ModelMessage(finalMessage)
                     val savedSession =
                         workingSession.copy(
                             state = workingState.toMap(),
@@ -74,9 +83,9 @@ class Runner(
                     sessionStore.save(app.name, savedSession)
                     return RunResult(
                         session = savedSession,
-                        finalMessage = response.message,
+                        finalMessage = finalMessage,
                         finalAgentName = activeAgent.name,
-                        structuredResponse = null,
+                        structuredResponse = structuredResponse,
                         toolExecutions = toolExecutions.toList(),
                     )
                 }
@@ -188,5 +197,24 @@ class Runner(
 
         val capabilities = (model as? SupportsModelCapabilities)?.modelCapabilities
         return capabilities?.supportsOutputSchemaWithTools != true
+    }
+
+    private fun validateStructuredResponse(
+        agent: LlmAgent,
+        structuredResponse: Any?,
+    ): Any? {
+        if (structuredResponse == null) {
+            return null
+        }
+
+        val outputSchema = agent.outputSchema ?: return structuredResponse
+        val responseMap = structuredResponse as? Map<*, *> ?: error("Structured response must be a map.")
+
+        return outputSchema.validate(
+            responseMap.entries.associate { (key, value) ->
+                val stringKey = key as? String ?: error("Structured response keys must be strings.")
+                stringKey to value
+            },
+        )
     }
 }

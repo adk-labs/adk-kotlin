@@ -11,7 +11,13 @@ data class ModelRequest(
     val systemInstructions: List<String>,
     val conversation: List<Message>,
     val availableTools: List<ToolDefinition>,
+    val outputSchema: OutputSchema? = null,
+    val responseMimeType: String? = null,
 ) {
+    companion object {
+        const val JSON_RESPONSE_MIME_TYPE = "application/json"
+    }
+
     val systemInstruction: String? =
         systemInstructions
             .takeIf { it.isNotEmpty() }
@@ -21,6 +27,7 @@ data class ModelRequest(
 sealed interface ModelResponse {
     data class Final(
         val message: String,
+        val structuredResponse: Any? = null,
     ) : ModelResponse
 
     data class ToolCalls(

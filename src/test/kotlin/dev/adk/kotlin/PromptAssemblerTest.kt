@@ -139,6 +139,34 @@ class PromptAssemblerTest {
             val setModelResponseTool = request.availableTools.firstOrNull { it.name == Runner.SET_MODEL_RESPONSE_TOOL }
             assertNotNull(setModelResponseTool)
             assertEquals(listOf("city", "summary"), setModelResponseTool.parameters.map { it.name })
+            assertEquals(null, request.outputSchema)
+            assertEquals(null, request.responseMimeType)
+        }
+
+    @Test
+    fun `adds native output schema metadata when workaround is not needed`() =
+        runTest {
+            val app =
+                adkApp("structured-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        outputSchema {
+                            field("city", "Resolved city name")
+                            field("summary", "Final weather summary")
+                        }
+                    }
+                }
+
+            val request =
+                PromptAssembler.createRequest(
+                    app = app,
+                    agent = app.rootAgent,
+                    session = AgentSession(id = "session-1", userId = "user-1"),
+                    transcript = listOf(UserMessage("Summarize the weather.")),
+                )
+
+            assertEquals(app.rootAgent.outputSchema, request.outputSchema)
+            assertEquals(ModelRequest.JSON_RESPONSE_MIME_TYPE, request.responseMimeType)
         }
 
     @Test

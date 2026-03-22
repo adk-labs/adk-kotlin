@@ -188,6 +188,8 @@ class RunnerTest {
                                     .orEmpty()
                                     .contains(PromptAssembler.SET_MODEL_RESPONSE_INSTRUCTION),
                             )
+                            assertEquals(null, request.outputSchema)
+                            assertEquals(null, request.responseMimeType)
                             ModelResponse.ToolCalls(
                                 listOf(
                                     ToolCall(
@@ -278,6 +280,68 @@ class RunnerTest {
                 )
 
             assertEquals("Used artifact-backed instructions.", result.finalMessage)
+            assertEquals("planner", result.finalAgentName)
+        }
+
+    @Test
+    fun `runner keeps native structured output when model supports schema with tools`() =
+        runTest {
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) {
+                    ToolOutput("Seoul is sunny")
+                }
+
+            val app =
+                adkApp("structured-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        outputSchema {
+                            field("city", "Resolved city name")
+                            field("summary", "Final weather summary")
+                        }
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                object : LanguageModel, SupportsModelCapabilities {
+                    override val modelCapabilities =
+                        ModelCapabilities(
+                            supportsOutputSchemaWithTools = true,
+                        )
+
+                    override suspend fun generate(request: ModelRequest): ModelResponse {
+                        assertEquals(app.rootAgent.outputSchema, request.outputSchema)
+                        assertEquals(ModelRequest.JSON_RESPONSE_MIME_TYPE, request.responseMimeType)
+                        assertTrue(request.availableTools.none { it.name == Runner.SET_MODEL_RESPONSE_TOOL })
+                        return ModelResponse.Final(
+                            message = "Seoul is sunny today.",
+                            structuredResponse =
+                                mapOf(
+                                    "city" to "Seoul",
+                                    "summary" to "Seoul is sunny today.",
+                                ),
+                        )
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Summarize the weather in Seoul.",
+                )
+
+            assertEquals("Seoul is sunny today.", result.finalMessage)
+            assertEquals(
+                mapOf("city" to "Seoul", "summary" to "Seoul is sunny today."),
+                result.structuredResponse,
+            )
             assertEquals("planner", result.finalAgentName)
         }
 }
