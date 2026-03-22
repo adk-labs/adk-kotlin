@@ -5,24 +5,30 @@ fun interface LanguageModel {
 }
 
 data class ModelRequest(
+    val model: String,
     val appName: String,
     val session: AgentSession,
     val agent: LlmAgent,
     val systemInstructions: List<String>,
     val conversation: List<Message>,
     val availableTools: List<ToolDefinition>,
+    val config: GenerateContentConfig? = null,
     val outputSchema: OutputSchema? = null,
-    val responseMimeType: String? = null,
 ) {
     companion object {
         const val JSON_RESPONSE_MIME_TYPE = "application/json"
     }
+
+    val responseMimeType: String? = config?.responseMimeType
 
     val systemInstruction: String? =
         systemInstructions
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n\n")
 }
+
+typealias LlmRequest = ModelRequest
+typealias LlmResponse = ModelResponse
 
 sealed interface ModelResponse {
     data class Final(

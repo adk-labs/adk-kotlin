@@ -56,6 +56,7 @@ class LlmAgentDsl internal constructor(
 ) {
     var model: String? = null
     var description: String = ""
+    var generateContentConfig: GenerateContentConfig? = null
     var maxIterations: Int = 8
     var disallowTransferToParent: Boolean = false
     var disallowTransferToPeers: Boolean = false
@@ -122,6 +123,7 @@ class LlmAgentDsl internal constructor(
                         )
                     },
             staticInstruction = staticInstructionText,
+            generateContentConfig = generateContentConfig,
             outputSchema = outputSchema,
             tools = tools.toList(),
             subAgents = subAgents.toList(),

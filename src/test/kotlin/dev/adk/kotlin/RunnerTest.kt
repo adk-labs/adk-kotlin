@@ -1,12 +1,18 @@
 package dev.adk.kotlin
 
 import kotlinx.coroutines.test.runTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class RunnerTest {
+    @AfterTest
+    fun tearDown() {
+        LlmRegistry.clearForTests()
+    }
+
     @Test
     fun `runner executes tools before returning the final answer`() =
         runTest {
@@ -343,6 +349,84 @@ class RunnerTest {
                 result.structuredResponse,
             )
             assertEquals("planner", result.finalAgentName)
+        }
+
+    @Test
+    fun `runner can resolve registry-backed llms and pass generation config`() =
+        runTest {
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) {
+                    ToolOutput("Seoul is sunny")
+                }
+
+            val app =
+                adkApp("structured-app") {
+                    rootAgent("planner") {
+                        model = "gemini-test"
+                        generateContentConfig =
+                            generateContentConfig {
+                                temperature = 0.2
+                                maxOutputTokens = 128
+                            }
+                        outputSchema {
+                            field("city", "Resolved city name")
+                            field("summary", "Final weather summary")
+                        }
+                        tool(weatherTool)
+                    }
+                }
+
+            val expectedOutputSchema = app.rootAgent.outputSchema
+
+            class FakeRegisteredLlm(
+                modelName: String,
+            ) : BaseLlm(modelName) {
+                override val modelCapabilities =
+                    ModelCapabilities(
+                        supportsOutputSchemaWithTools = true,
+                    )
+
+                override suspend fun generateContent(
+                    request: ModelRequest,
+                    stream: Boolean,
+                ): ModelResponse {
+                    assertEquals("gemini-test", request.model)
+                    assertEquals(0.2, request.config?.temperature)
+                    assertEquals(128, request.config?.maxOutputTokens)
+                    assertEquals(expectedOutputSchema, request.outputSchema)
+                    assertEquals(ModelRequest.JSON_RESPONSE_MIME_TYPE, request.responseMimeType)
+                    assertTrue(request.availableTools.none { it.name == Runner.SET_MODEL_RESPONSE_TOOL })
+                    return ModelResponse.Final(
+                        message = "Resolved by registered provider.",
+                        structuredResponse =
+                            mapOf(
+                                "city" to "Seoul",
+                                "summary" to "Resolved by registered provider.",
+                            ),
+                    )
+                }
+            }
+
+            LlmRegistry.clearForTests()
+            LlmRegistry.registerLlm("gemini-test", LlmFactory { modelName -> FakeRegisteredLlm(modelName) })
+
+            val runner = Runner(app = app, model = RegistryBackedLanguageModel())
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Summarize the weather in Seoul.",
+                )
+
+            assertEquals("Resolved by registered provider.", result.finalMessage)
+            assertEquals(
+                mapOf("city" to "Seoul", "summary" to "Resolved by registered provider."),
+                result.structuredResponse,
+            )
         }
 
     @Test

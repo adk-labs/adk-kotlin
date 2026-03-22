@@ -49,6 +49,28 @@ class AgentDslTest {
     }
 
     @Test
+    fun `stores generate content config on agent`() {
+        val app =
+            adkApp("travel-assistant") {
+                rootAgent("planner") {
+                    model = "gemini-2.5-pro"
+                    generateContentConfig =
+                        generateContentConfig {
+                            temperature = 0.2
+                            topP = 0.9
+                            maxOutputTokens = 256
+                            stopSequences("DONE")
+                        }
+                }
+            }
+
+        assertEquals(0.2, app.rootAgent.generateContentConfig?.temperature)
+        assertEquals(0.9, app.rootAgent.generateContentConfig?.topP)
+        assertEquals(256, app.rootAgent.generateContentConfig?.maxOutputTokens)
+        assertEquals(listOf("DONE"), app.rootAgent.generateContentConfig?.stopSequences)
+    }
+
+    @Test
     fun `supports official naming aliases and plural DSL methods`() {
         val lookupWeather =
             tool(

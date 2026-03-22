@@ -196,7 +196,12 @@ class Runner(
             return false
         }
 
-        val capabilities = (model as? SupportsModelCapabilities)?.modelCapabilities
+        val capabilities =
+            when (model) {
+                is SupportsPerModelCapabilities -> model.modelCapabilities(agent.model)
+                is SupportsModelCapabilities -> model.modelCapabilities
+                else -> null
+            }
         return capabilities?.supportsOutputSchemaWithTools != true
     }
 

@@ -19,6 +19,7 @@ internal object PromptAssembler {
     ): ModelRequest {
         val systemInstructions = mutableListOf<String>()
         val nativeOutputSchema = nativeOutputSchema(agent, includeOutputSchemaWorkaround)
+        val requestConfig = buildGenerateContentConfig(agent, nativeOutputSchema)
 
         app.globalInstruction
             ?.let {
@@ -65,6 +66,7 @@ internal object PromptAssembler {
         }
 
         return ModelRequest(
+            model = agent.model,
             appName = app.name,
             session = session,
             agent = agent,
@@ -81,13 +83,8 @@ internal object PromptAssembler {
                     transferTargets = transferTargets,
                     includeOutputSchemaWorkaround = includeOutputSchemaWorkaround,
                 ),
+            config = requestConfig,
             outputSchema = nativeOutputSchema,
-            responseMimeType =
-                if (nativeOutputSchema != null) {
-                    ModelRequest.JSON_RESPONSE_MIME_TYPE
-                } else {
-                    null
-                },
         )
     }
 
@@ -264,6 +261,20 @@ internal object PromptAssembler {
         agent: LlmAgent,
         includeOutputSchemaWorkaround: Boolean,
     ): OutputSchema? = agent.outputSchema.takeUnless { includeOutputSchemaWorkaround }
+
+    private fun buildGenerateContentConfig(
+        agent: LlmAgent,
+        nativeOutputSchema: OutputSchema?,
+    ): GenerateContentConfig? {
+        val baseConfig = agent.generateContentConfig
+        if (nativeOutputSchema == null) {
+            return baseConfig
+        }
+
+        return (baseConfig ?: GenerateContentConfig()).copy(
+            responseMimeType = ModelRequest.JSON_RESPONSE_MIME_TYPE,
+        )
+    }
 
     private fun buildAvailableTools(
         agent: LlmAgent,

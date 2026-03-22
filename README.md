@@ -23,6 +23,8 @@ but the API shape here follows Kotlin conventions first:
   coexist for the current model.
 - Artifact-aware instruction interpolation via `{artifact.filename}` with an
   in-memory artifact service wired by default in `Runner`.
+- Model-layer foundation with `BaseLlm`, `LlmRegistry`, and explicit
+  `generateContentConfig` propagation on requests.
 
 ## Current Scope
 
@@ -34,6 +36,7 @@ The repository currently contains the first runnable foundation:
 - An in-memory `SessionStore`.
 - A default in-memory `ArtifactService` for official-style instruction
   interpolation.
+- A provider-ready model foundation instead of a single raw callback surface.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -54,6 +57,11 @@ val app: App = app("travel_assistant") {
     rootAgent(
         agent("planner") {
             model = "gemini-2.5-pro"
+            generateContentConfig =
+                generateContentConfig {
+                    temperature = 0.2
+                    maxOutputTokens = 512
+                }
             description = "Coordinates trip planning."
             instruction("Use tools before answering.")
             tools(
@@ -70,6 +78,24 @@ val app: App = app("travel_assistant") {
         }
     )
 }
+```
+
+Provider modules can now plug in through `BaseLlm` and `LlmRegistry`:
+
+```kotlin
+LlmRegistry.registerLlm("gemini-.*") { modelName ->
+    object : BaseLlm(modelName) {
+        override suspend fun generateContent(
+            request: ModelRequest,
+            stream: Boolean,
+        ): ModelResponse = ModelResponse.Final("Implement provider call here.")
+    }
+}
+
+val runner = Runner(
+    app = app,
+    model = RegistryBackedLanguageModel(),
+)
 ```
 
 Artifact-backed instructions use the same interpolation path:

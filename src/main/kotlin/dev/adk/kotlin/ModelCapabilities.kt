@@ -7,3 +7,7 @@ data class ModelCapabilities(
 interface SupportsModelCapabilities {
     val modelCapabilities: ModelCapabilities
 }
+
+interface SupportsPerModelCapabilities {
+    fun modelCapabilities(modelName: String): ModelCapabilities
+}

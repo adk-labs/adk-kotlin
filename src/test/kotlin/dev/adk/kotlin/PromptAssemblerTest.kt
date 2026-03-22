@@ -165,8 +165,41 @@ class PromptAssemblerTest {
                     transcript = listOf(UserMessage("Summarize the weather.")),
                 )
 
+            assertEquals("gemini-2.5-pro", request.model)
             assertEquals(app.rootAgent.outputSchema, request.outputSchema)
             assertEquals(ModelRequest.JSON_RESPONSE_MIME_TYPE, request.responseMimeType)
+        }
+
+    @Test
+    fun `propagates generate content config into the model request`() =
+        runTest {
+            val app =
+                adkApp("configured-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        generateContentConfig =
+                            generateContentConfig {
+                                temperature = 0.2
+                                topP = 0.9
+                                maxOutputTokens = 256
+                                stopSequences("DONE")
+                            }
+                    }
+                }
+
+            val request =
+                PromptAssembler.createRequest(
+                    app = app,
+                    agent = app.rootAgent,
+                    session = AgentSession(id = "session-1", userId = "user-1"),
+                    transcript = listOf(UserMessage("Summarize the weather.")),
+                )
+
+            assertEquals("gemini-2.5-pro", request.model)
+            assertEquals(0.2, request.config?.temperature)
+            assertEquals(0.9, request.config?.topP)
+            assertEquals(256, request.config?.maxOutputTokens)
+            assertEquals(listOf("DONE"), request.config?.stopSequences)
         }
 
     @Test
