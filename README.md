@@ -35,6 +35,8 @@ but the API shape here follows Kotlin conventions first:
   surface.
 - Sequential, loop, and parallel shell agents for official-style multi-agent
   orchestration.
+- Planner foundations with `BuiltInPlanner` thinking-config override and
+  `PlanReActPlanner` instruction injection.
 
 ## Current Scope
 
@@ -53,6 +55,7 @@ The repository currently contains the first runnable foundation:
 - Persistent file-backed session/artifact services and in-memory memory search.
 - Sequential, loop, and parallel shell-agent orchestration on top of the same
   runner/event model.
+- Planner support for model-native thinking and NL plan/react prompting.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -117,6 +120,22 @@ val fanOut: ParallelAgent =
     parallelAgent("fan_out") {
         description = "Runs multiple specialists in isolated branches."
         subAgents(greeter, app.rootAgent)
+    }
+
+val plannerDriven: Agent =
+    agent("planner_driven") {
+        model = "gemini-2.5-pro"
+        planner =
+            builtInPlanner {
+                includeThoughts = true
+                thinkingBudget = 128
+            }
+    }
+
+val planReact: Agent =
+    agent("plan_react") {
+        model = "gemini-2.5-pro"
+        planner = planReActPlanner()
     }
 ```
 
@@ -220,6 +239,12 @@ The Kotlin runtime now follows the official ADK layering:
 run against the same starting session snapshot, and Kotlin merges their emitted
 events by completion order instead of letting sibling state leak across the
 fan-out.
+
+Planner support now follows the same split as the official ADK:
+
+- `BuiltInPlanner` overrides `thinkingConfig` on the outgoing model request.
+- `PlanReActPlanner` appends planning instructions and extracts the
+  `/*FINAL_ANSWER*/` section from final responses.
 
 Structured output now follows the official split path as well:
 

@@ -66,6 +66,7 @@ class LlmAgentDsl internal constructor(
     var model: String? = null
     var description: String = ""
     var generateContentConfig: GenerateContentConfig? = null
+    var planner: BasePlanner? = null
     var maxIterations: Int = 8
     var disallowTransferToParent: Boolean = false
     var disallowTransferToPeers: Boolean = false
@@ -98,6 +99,10 @@ class LlmAgentDsl internal constructor(
 
     fun outputSchema(block: OutputSchemaDsl.() -> Unit) {
         outputSchema = OutputSchemaDsl().apply(block).build()
+    }
+
+    fun planner(planner: BasePlanner) {
+        this.planner = planner
     }
 
     fun tool(tool: Tool) {
@@ -146,6 +151,7 @@ class LlmAgentDsl internal constructor(
             staticInstruction = staticInstructionText,
             generateContentConfig = generateContentConfig,
             outputSchema = outputSchema,
+            planner = planner,
             tools = tools.toList(),
             subAgents = subAgents.toList(),
             maxIterations = maxIterations,

@@ -970,4 +970,93 @@ class RunnerTest {
                 result.events.drop(1).map { it.branch },
             )
         }
+
+    @Test
+    fun `runner applies built in planner thinking config over generate content config`() =
+        runTest {
+            val app =
+                adkApp("planner-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        generateContentConfig =
+                            generateContentConfig {
+                                temperature = 0.2
+                                thinkingConfig {
+                                    includeThoughts = false
+                                    thinkingBudget = 16
+                                }
+                            }
+                        planner =
+                            builtInPlanner {
+                                includeThoughts = true
+                                thinkingBudget = 128
+                            }
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertEquals(0.2, request.config?.temperature)
+                    assertEquals(true, request.config?.thinkingConfig?.includeThoughts)
+                    assertEquals(128, request.config?.thinkingConfig?.thinkingBudget)
+                    ModelResponse.Final("Planned with model-native thinking.")
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Think before answering.",
+                )
+
+            assertEquals("Planned with model-native thinking.", result.finalMessage)
+        }
+
+    @Test
+    fun `runner injects plan react instructions and extracts final answer tags`() =
+        runTest {
+            val app =
+                adkApp("planner-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        planner = planReActPlanner()
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertTrue(
+                        request.systemInstruction
+                            .orEmpty()
+                            .contains(PlanReActPlanner.PLANNING_TAG),
+                    )
+                    assertTrue(
+                        request.systemInstruction
+                            .orEmpty()
+                            .contains(PlanReActPlanner.FINAL_ANSWER_TAG),
+                    )
+                    ModelResponse.Final(
+                        """
+                        ${PlanReActPlanner.PLANNING_TAG}
+                        1. Gather context.
+
+                        ${PlanReActPlanner.FINAL_ANSWER_TAG}
+                        Final concise answer.
+                        """.trimIndent(),
+                    )
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Plan then answer.",
+                )
+
+            assertEquals("Final concise answer.", result.finalMessage)
+        }
 }

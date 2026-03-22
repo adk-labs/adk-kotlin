@@ -371,15 +371,21 @@ class Runner(
                     includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(agent),
                     includeExitLoopTool = allowExitLoop,
                 )
+            val finalRequest = agent.planner?.prepareRequest(workingSession, request) ?: request
 
             val response =
-                pluginManager.runBeforeModelCallback(callbackContext, request)
+                pluginManager.runBeforeModelCallback(callbackContext, finalRequest)
                     ?: try {
-                        model.generate(request)
+                        model.generate(finalRequest)
                     } catch (error: Throwable) {
-                        pluginManager.runOnModelErrorCallback(callbackContext, request, error) ?: throw error
+                        pluginManager.runOnModelErrorCallback(callbackContext, finalRequest, error) ?: throw error
                     }
-            val finalModelResponse = pluginManager.runAfterModelCallback(callbackContext, response) ?: response
+            val plannerProcessedResponse = agent.planner?.processPlanningResponse(response) ?: response
+            val responseAfterPlugins =
+                pluginManager.runAfterModelCallback(callbackContext, plannerProcessedResponse)
+                    ?: plannerProcessedResponse
+            val finalModelResponse =
+                agent.planner?.processPlanningResponse(responseAfterPlugins) ?: responseAfterPlugins
 
             when (finalModelResponse) {
                 is ModelResponse.Final -> {

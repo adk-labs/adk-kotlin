@@ -181,4 +181,19 @@ class AgentDslTest {
         assertEquals("", fanOut.model)
         assertEquals(listOf("fast", "slow"), fanOut.subAgents.map { it.name })
     }
+
+    @Test
+    fun `stores planner configuration on llm agents`() {
+        val planner = builtInPlanner { thinkingBudget = 128 }
+
+        val app =
+            adkApp("planner-app") {
+                rootAgent("planner") {
+                    model = "gemini-2.5-pro"
+                    this.planner = planner
+                }
+            }
+
+        assertEquals(planner, app.rootAgent.planner)
+    }
 }

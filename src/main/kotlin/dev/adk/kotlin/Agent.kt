@@ -127,6 +127,7 @@ data class LlmAgent(
     val staticInstruction: String? = null,
     val generateContentConfig: GenerateContentConfig? = null,
     val outputSchema: OutputSchema? = null,
+    val planner: BasePlanner? = null,
     val tools: List<Tool> = emptyList(),
     val subAgents: List<LlmAgent> = emptyList(),
     val maxIterations: Int = 8,
@@ -160,6 +161,7 @@ data class LlmAgent(
                 require(staticInstruction == null) { "SequentialAgent '$name' cannot declare staticInstruction." }
                 require(generateContentConfig == null) { "SequentialAgent '$name' cannot declare generateContentConfig." }
                 require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
+                require(planner == null) { "SequentialAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "SequentialAgent '$name' cannot declare tools." }
             }
 
@@ -173,6 +175,7 @@ data class LlmAgent(
                 require(staticInstruction == null) { "LoopAgent '$name' cannot declare staticInstruction." }
                 require(generateContentConfig == null) { "LoopAgent '$name' cannot declare generateContentConfig." }
                 require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
+                require(planner == null) { "LoopAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "LoopAgent '$name' cannot declare tools." }
             }
 
@@ -186,6 +189,7 @@ data class LlmAgent(
                     "ParallelAgent '$name' cannot declare generateContentConfig."
                 }
                 require(outputSchema == null) { "ParallelAgent '$name' cannot declare outputSchema." }
+                require(planner == null) { "ParallelAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "ParallelAgent '$name' cannot declare tools." }
             }
         }

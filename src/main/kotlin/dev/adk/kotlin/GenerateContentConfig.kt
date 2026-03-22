@@ -1,5 +1,10 @@
 package dev.adk.kotlin
 
+data class ThinkingConfig(
+    val includeThoughts: Boolean? = null,
+    val thinkingBudget: Int? = null,
+)
+
 data class GenerateContentConfig(
     val temperature: Double? = null,
     val topP: Double? = null,
@@ -8,6 +13,7 @@ data class GenerateContentConfig(
     val maxOutputTokens: Int? = null,
     val stopSequences: List<String> = emptyList(),
     val responseMimeType: String? = null,
+    val thinkingConfig: ThinkingConfig? = null,
 ) {
     init {
         require(topK == null || topK > 0) { "topK must be positive when provided." }
@@ -19,6 +25,21 @@ data class GenerateContentConfig(
 }
 
 @AdkDsl
+class ThinkingConfigDsl {
+    var includeThoughts: Boolean? = null
+    var thinkingBudget: Int? = null
+
+    internal fun build(): ThinkingConfig =
+        ThinkingConfig(
+            includeThoughts = includeThoughts,
+            thinkingBudget = thinkingBudget,
+        )
+}
+
+fun thinkingConfig(block: ThinkingConfigDsl.() -> Unit): ThinkingConfig =
+    ThinkingConfigDsl().apply(block).build()
+
+@AdkDsl
 class GenerateContentConfigDsl {
     var temperature: Double? = null
     var topP: Double? = null
@@ -28,6 +49,7 @@ class GenerateContentConfigDsl {
     var responseMimeType: String? = null
 
     private val stopSequences = mutableListOf<String>()
+    private var thinkingConfig: ThinkingConfig? = null
 
     fun stopSequence(value: String) {
         value
@@ -40,6 +62,10 @@ class GenerateContentConfigDsl {
         values.forEach(::stopSequence)
     }
 
+    fun thinkingConfig(block: ThinkingConfigDsl.() -> Unit) {
+        thinkingConfig = dev.adk.kotlin.thinkingConfig(block)
+    }
+
     internal fun build(): GenerateContentConfig =
         GenerateContentConfig(
             temperature = temperature,
@@ -49,6 +75,7 @@ class GenerateContentConfigDsl {
             maxOutputTokens = maxOutputTokens,
             stopSequences = stopSequences.toList(),
             responseMimeType = responseMimeType,
+            thinkingConfig = thinkingConfig,
         )
 }
 

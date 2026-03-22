@@ -190,6 +190,10 @@ class PromptAssemblerTest {
                                 topP = 0.9
                                 maxOutputTokens = 256
                                 stopSequences("DONE")
+                                thinkingConfig {
+                                    includeThoughts = true
+                                    thinkingBudget = 64
+                                }
                             }
                     }
                 }
@@ -207,6 +211,8 @@ class PromptAssemblerTest {
             assertEquals(0.9, request.config?.topP)
             assertEquals(256, request.config?.maxOutputTokens)
             assertEquals(listOf("DONE"), request.config?.stopSequences)
+            assertEquals(true, request.config?.thinkingConfig?.includeThoughts)
+            assertEquals(64, request.config?.thinkingConfig?.thinkingBudget)
         }
 
     @Test
