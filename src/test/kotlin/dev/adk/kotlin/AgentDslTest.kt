@@ -17,6 +17,7 @@ class AgentDslTest {
 
         val app =
             adkApp("travel-assistant") {
+                globalInstruction("Always respond for {user:name}.")
                 rootAgent("coordinator") {
                     model = "gemini-2.5-pro"
                     description = "Coordinates trip planning."
@@ -37,9 +38,13 @@ class AgentDslTest {
         assertEquals("travel-assistant", app.name)
         assertEquals("coordinator", agent.name)
         assertEquals("gemini-2.5-pro", agent.model)
-        assertEquals(2, agent.instructions.size)
+        assertEquals("Always respond for {user:name}.", app.globalInstruction?.text)
+        assertEquals(
+            "Ask for clarification only when the request is ambiguous.\nPrefer tool results over guessing.",
+            agent.instruction?.text,
+        )
         assertEquals(listOf("lookup_weather"), agent.tools.map { it.definition.name })
         assertEquals(listOf("greeter"), agent.subAgents.map { it.name })
-        assertTrue(agent.renderSystemInstruction().contains("Tool: lookup_weather"))
+        assertTrue(app.transferTargetsOf(agent).map { it.name }.contains("greeter"))
     }
 }

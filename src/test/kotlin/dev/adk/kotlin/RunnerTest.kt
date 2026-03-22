@@ -70,7 +70,9 @@ class RunnerTest {
                 )
 
             assertEquals("Seoul is sunny today.", result.finalMessage)
+            assertEquals("planner", result.finalAgentName)
             assertEquals(1, result.toolExecutions.size)
+            assertEquals("planner", result.toolExecutions.single().agentName)
             assertEquals("Seoul", result.session.state["last_city"])
 
             val stored = sessionStore.get("trip-planner", "user-1", "session-1")
@@ -79,5 +81,70 @@ class RunnerTest {
             assertTrue(stored.transcript[0] is UserMessage)
             assertTrue(stored.transcript[1] is ToolMessage)
             assertTrue(stored.transcript[2] is ModelMessage)
+        }
+
+    @Test
+    fun `runner transfers control to a sub-agent`() =
+        runTest {
+            var modelCalls = 0
+
+            val app =
+                adkApp("research-app") {
+                    rootAgent("coordinator") {
+                        model = "gemini-2.5-pro"
+                        description = "Routes work to the best specialist."
+                        subAgent("researcher") {
+                            model = "gemini-2.5-flash"
+                            description = "Handles research-heavy questions."
+                            instruction("Provide a researched answer.")
+                        }
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+
+                    when (modelCalls) {
+                        1 -> {
+                            assertEquals("coordinator", request.agent.name)
+                            assertTrue(request.systemInstruction.orEmpty().contains("transfer_to_agent"))
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = Runner.TRANSFER_TO_AGENT_TOOL,
+                                        arguments = mapOf("agent_name" to "researcher"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            assertEquals("researcher", request.agent.name)
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains("Your internal name is \"researcher\""),
+                            )
+                            ModelResponse.Final("Handled by researcher.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Research the neighborhood.",
+                )
+
+            assertEquals("Handled by researcher.", result.finalMessage)
+            assertEquals("researcher", result.finalAgentName)
+            assertEquals(Runner.TRANSFER_TO_AGENT_TOOL, result.toolExecutions.single().call.toolName)
+            assertEquals("coordinator", result.toolExecutions.single().agentName)
         }
 }

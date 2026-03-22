@@ -1,9 +1,17 @@
 package dev.adk.kotlin
 
+data class ToolParameter(
+    val name: String,
+    val description: String = "",
+    val allowedValues: List<String> = emptyList(),
+    val required: Boolean = true,
+)
+
 data class ToolDefinition(
     val name: String,
     val description: String,
     val inputSchema: String? = null,
+    val parameters: List<ToolParameter> = emptyList(),
 )
 
 data class ToolOutput(
@@ -47,6 +55,7 @@ fun tool(
     name: String,
     description: String,
     inputSchema: String? = null,
+    parameters: List<ToolParameter> = emptyList(),
     block: suspend ToolContext.(ToolCall) -> ToolOutput,
 ): Tool =
     LambdaTool(
@@ -54,6 +63,7 @@ fun tool(
             name = name,
             description = description,
             inputSchema = inputSchema,
+            parameters = parameters,
         ),
         block = block,
     )

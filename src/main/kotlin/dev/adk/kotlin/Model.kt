@@ -8,9 +8,14 @@ data class ModelRequest(
     val appName: String,
     val session: AgentSession,
     val agent: LlmAgent,
+    val systemInstructions: List<String>,
+    val conversation: List<Message>,
     val availableTools: List<ToolDefinition>,
 ) {
-    val systemInstruction: String = agent.renderSystemInstruction()
+    val systemInstruction: String? =
+        systemInstructions
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
 }
 
 sealed interface ModelResponse {
