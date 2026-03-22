@@ -27,6 +27,8 @@ but the API shape here follows Kotlin conventions first:
   `generateContentConfig` propagation on requests.
 - First-class `Event` and `EventActions` emission with state, artifact,
   transfer, and completion deltas.
+- Official-style plugin lifecycle hooks around user input, model calls, tool
+  execution, event emission, and run completion.
 
 ## Current Scope
 
@@ -40,6 +42,7 @@ The repository currently contains the first runnable foundation:
   interpolation.
 - A provider-ready model foundation instead of a single raw callback surface.
 - First-class runtime events persisted on sessions and returned from runs.
+- A plugin manager and global plugin callbacks integrated into `Runner`.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -98,6 +101,18 @@ LlmRegistry.registerLlm("gemini-.*") { modelName ->
 val runner = Runner(
     app = app,
     model = RegistryBackedLanguageModel(),
+    plugins =
+        listOf(
+            object : BasePlugin("logger") {
+                override suspend fun onEventCallback(
+                    invocationContext: InvocationContext,
+                    event: Event,
+                ): Event? {
+                    println("${event.author}: ${event.content?.text}")
+                    return null
+                }
+            }
+        ),
 )
 
 val result = runner.run(
@@ -170,7 +185,7 @@ Structured output now follows the official split path as well:
 ## Near-Term Roadmap
 
 - Introduce provider modules instead of baking model transports into core.
-- Add plugins and streaming on top of the new event surface.
+- Add richer plugin behaviors such as request mutation and built-in plugins.
 - Add richer tool schemas and persistent session backends.
 - Align more of the official runtime surface, including broader tool/runtime
   schemas and storage modules.

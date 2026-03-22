@@ -596,4 +596,137 @@ class RunnerTest {
                 result.events.last().actions.agentState,
             )
         }
+
+    @Test
+    fun `plugins can short-circuit model calls and rewrite final events`() =
+        runTest {
+            var modelCalls = 0
+            var afterRunCalled = false
+
+            val plugin =
+                object : BasePlugin("cached-response") {
+                    override suspend fun beforeModelCallback(
+                        callbackContext: CallbackContext,
+                        llmRequest: LlmRequest,
+                    ): LlmResponse? = ModelResponse.Final("Cached answer.")
+
+                    override suspend fun onEventCallback(
+                        invocationContext: InvocationContext,
+                        event: Event,
+                    ): Event? =
+                        if (event.actions.endOfAgent == true) {
+                            event.copy(content = ModelMessage("Cached answer. [plugin]"))
+                        } else {
+                            null
+                        }
+
+                    override suspend fun afterRunCallback(
+                        invocationContext: InvocationContext,
+                        runResult: RunResult,
+                    ) {
+                        afterRunCalled = true
+                    }
+                }
+
+            val app =
+                adkApp("plugin-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    modelCalls += 1
+                    ModelResponse.Final("Model should not run.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins = listOf(plugin),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use the cache.",
+                )
+
+            assertEquals(0, modelCalls)
+            assertEquals("Cached answer. [plugin]", result.finalMessage)
+            assertEquals("planner", result.finalAgentName)
+            assertEquals("Cached answer. [plugin]", result.events.last().content?.text)
+            assertTrue(afterRunCalled)
+        }
+
+    @Test
+    fun `plugins can short-circuit tool execution`() =
+        runTest {
+            var toolExecutions = 0
+            var modelCalls = 0
+
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) {
+                    toolExecutions += 1
+                    ToolOutput("tool execution should be skipped")
+                }
+
+            val plugin =
+                object : BasePlugin("tool-cache") {
+                    override suspend fun beforeToolCallback(
+                        tool: Tool,
+                        toolCall: ToolCall,
+                        toolContext: ToolContext,
+                    ): ToolOutput? = ToolOutput("plugin supplied weather")
+                }
+
+            val app =
+                adkApp("plugin-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("lookup_weather"),
+                                ),
+                            )
+
+                        2 -> ModelResponse.Final("Done.")
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins = listOf(plugin),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use plugin tool cache.",
+                )
+
+            assertEquals(0, toolExecutions)
+            assertEquals("plugin supplied weather", result.toolExecutions.single().output.content)
+            assertEquals("plugin supplied weather", result.events[1].content?.text)
+            assertEquals("Done.", result.finalMessage)
+        }
 }
