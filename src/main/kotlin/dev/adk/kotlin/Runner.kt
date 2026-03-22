@@ -383,6 +383,7 @@ class Runner(
                 preprocessLlmRequest(
                     agent = agent,
                     session = workingSession,
+                    invocationId = invocationContext.invocationId,
                     workingState = workingState,
                     resolvedTools = resolvedTools,
                     llmRequest = request,
@@ -624,6 +625,7 @@ class Runner(
                             createToolContext(
                                 agent = agent,
                                 session = workingSession,
+                                invocationId = invocationContext.invocationId,
                                 workingState = workingState,
                                 functionCallId = callId,
                                 toolConfirmation = confirmation,
@@ -911,6 +913,7 @@ class Runner(
     private suspend fun preprocessLlmRequest(
         agent: LlmAgent,
         session: AgentSession,
+        invocationId: String,
         workingState: MutableMap<String, String>,
         resolvedTools: List<Tool>,
         llmRequest: LlmRequest,
@@ -919,6 +922,7 @@ class Runner(
             createToolContext(
                 agent = agent,
                 session = session,
+                invocationId = invocationId,
                 workingState = workingState.toMutableMap(),
             )
         var currentRequest = llmRequest
@@ -936,6 +940,7 @@ class Runner(
     private fun createToolContext(
         agent: LlmAgent,
         session: AgentSession,
+        invocationId: String,
         workingState: MutableMap<String, String>,
         functionCallId: String? = null,
         toolConfirmation: ToolConfirmation? = null,
@@ -944,6 +949,7 @@ class Runner(
             appName = app.name,
             agent = agent,
             session = session,
+            invocationId = invocationId,
             workingState = workingState,
             artifactService = artifactService,
             memoryService = memoryService,

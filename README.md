@@ -53,6 +53,8 @@ but the API shape here follows Kotlin conventions first:
   `loadArtifacts`, including request preprocessing hooks.
 - Plugin request mutation plus `GlobalInstructionPlugin` for official-style
   before-model instruction prepending on immutable requests.
+- Packaged `ContextFilterPlugin` and `DebugLoggingPlugin` for official-style
+  prompt trimming and local debug trace capture.
 
 ## Current Scope
 
@@ -84,6 +86,7 @@ The repository currently contains the first runnable foundation:
   pipeline as official ADK preprocessors.
 - Plugin-level request rewriting before model execution, including a packaged
   `GlobalInstructionPlugin`.
+- Packaged context filtering and debug-log file emission plugins.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -229,6 +232,8 @@ val memoryAwareAgent: Agent =
 val runtimePlugins =
     listOf(
         globalInstructionPlugin("Speak to {user:name} politely."),
+        contextFilterPlugin(numInvocationsToKeep = 2),
+        DebugLoggingPlugin(),
     )
 
 val publishTool: Tool =

@@ -2,6 +2,7 @@ package dev.adk.kotlin
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -2100,5 +2101,104 @@ class RunnerTest {
                 )
 
             assertEquals("Used plugin global instruction.", result.finalMessage)
+        }
+
+    @Test
+    fun `context filter plugin keeps only the most recent invocation`() =
+        runTest {
+            var modelCalls = 0
+            val sessionStore = InMemorySessionStore()
+
+            val app =
+                adkApp("context-filter-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 -> {
+                            assertEquals(listOf("First question."), request.conversation.map { it.text })
+                            ModelResponse.Final("First answer.")
+                        }
+
+                        2 -> {
+                            assertEquals(listOf("Second question."), request.conversation.map { it.text })
+                            ModelResponse.Final("Second answer.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    sessionStore = sessionStore,
+                    plugins =
+                        listOf(
+                            contextFilterPlugin(numInvocationsToKeep = 1),
+                        ),
+                )
+
+            runner.run(
+                userId = "user-1",
+                sessionId = "session-1",
+                input = "First question.",
+            )
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Second question.",
+                )
+
+            assertEquals("Second answer.", result.finalMessage)
+        }
+
+    @Test
+    fun `debug logging plugin writes invocation traces to disk`() =
+        runTest {
+            val outputPath = Files.createTempDirectory("adk-debug").resolve("adk_debug.yaml")
+
+            val app =
+                adkApp("debug-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    ModelResponse.Final("Debug final response.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins =
+                        listOf(
+                            DebugLoggingPlugin(outputPath = outputPath),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Debug this run.",
+                )
+
+            val debugLog = Files.readString(outputPath)
+
+            assertEquals("Debug final response.", result.finalMessage)
+            assertTrue(debugLog.contains("invocation_id"))
+            assertTrue(debugLog.contains("Debug this run."))
+            assertTrue(debugLog.contains("Debug final response."))
         }
 }

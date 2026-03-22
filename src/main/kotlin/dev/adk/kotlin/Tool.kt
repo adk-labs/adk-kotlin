@@ -124,6 +124,7 @@ class ToolContext internal constructor(
     val appName: String,
     val agent: LlmAgent,
     val session: AgentSession,
+    val invocationId: String? = null,
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
