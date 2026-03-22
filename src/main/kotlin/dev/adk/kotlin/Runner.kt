@@ -43,6 +43,7 @@ class Runner(
     val artifactService: ArtifactService = InMemoryArtifactService(),
     plugins: List<Plugin> = emptyList(),
     val memoryService: MemoryService? = null,
+    val credentialService: CredentialService? = null,
     private val toolConfirmationHandler: ToolConfirmationHandler? = null,
 ) {
     private val pluginManager = PluginManager(plugins)
@@ -588,8 +589,10 @@ class Runner(
                         val tool =
                             agent.tools.find { it.definition.name == call.toolName }
                                 ?: error("Unknown tool requested: ${call.toolName}")
+                        val callId = UUID.randomUUID().toString()
                         val confirmation =
                             maybeConfirmToolCall(
+                                callId = callId,
                                 agent = agent,
                                 call = call,
                                 tool = tool,
@@ -611,6 +614,8 @@ class Runner(
                                 workingState = workingState,
                                 artifactService = artifactService,
                                 memoryService = memoryService,
+                                credentialService = credentialService,
+                                functionCallId = callId,
                                 toolConfirmation = confirmation,
                                 agentToolExecutor = { toolContext, toolAgent, arguments, skipSummarization, includePlugins ->
                                     executeAgentTool(
@@ -651,6 +656,7 @@ class Runner(
                                                 skipSummarization = finalToolOutput.skipSummarization.takeIf { it },
                                                 stateDelta = computeStateDelta(stateBeforeTool, workingState),
                                                 artifactDelta = context.recordedArtifactDelta(),
+                                                requestedAuthConfigs = context.recordedRequestedAuthConfigs(),
                                             ),
                                         branch = app.branchOf(agent),
                                     ),
@@ -676,6 +682,7 @@ class Runner(
     }
 
     private suspend fun maybeConfirmToolCall(
+        callId: String,
         agent: LlmAgent,
         call: ToolCall,
         tool: Tool,
@@ -689,7 +696,6 @@ class Runner(
             return null
         }
 
-        val callId = UUID.randomUUID().toString()
         val suggestedConfirmation =
             ToolConfirmation(
                 hint = tool.definition.confirmationHint,
@@ -994,6 +1000,7 @@ class Runner(
                 artifactService = artifactService,
                 plugins = if (includePlugins) pluginManager.snapshotPlugins() else emptyList(),
                 memoryService = memoryService,
+                credentialService = credentialService,
                 toolConfirmationHandler = toolConfirmationHandler,
             )
 

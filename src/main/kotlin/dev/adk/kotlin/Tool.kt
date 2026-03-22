@@ -63,10 +63,13 @@ class ToolContext internal constructor(
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
+    private val credentialService: CredentialService? = null,
+    private val functionCallId: String? = null,
     val toolConfirmation: ToolConfirmation? = null,
     private val agentToolExecutor: suspend (ToolContext, LlmAgent, Map<String, Any?>, Boolean, Boolean) -> ToolOutput,
 ) {
     private val artifactDelta = linkedMapOf<String, Int>()
+    private val requestedAuthConfigs = linkedMapOf<String, AuthConfig>()
 
     val state: MutableMap<String, String>
         get() = workingState
@@ -127,6 +130,35 @@ class ToolContext internal constructor(
         )
     }
 
+    suspend fun saveCredential(
+        authConfig: AuthConfig,
+        credential: AuthCredential,
+    ) {
+        val service = credentialService ?: error("Credential service is not initialized.")
+        service.saveCredential(
+            authConfig = authConfig,
+            appName = appName,
+            userId = session.userId,
+            credential = credential,
+        )
+    }
+
+    suspend fun loadCredential(authConfig: AuthConfig): AuthCredential? {
+        val service = credentialService ?: error("Credential service is not initialized.")
+        return service.loadCredential(
+            authConfig = authConfig,
+            appName = appName,
+            userId = session.userId,
+        )
+    }
+
+    fun getAuthResponse(authConfig: AuthConfig): AuthCredential? = AuthHandler(authConfig).getAuthResponse(workingState)
+
+    fun requestCredential(authConfig: AuthConfig) {
+        val callId = requireNotNull(functionCallId) { "requestCredential requires a function call id." }
+        requestedAuthConfigs[callId] = AuthHandler(authConfig).generateAuthRequest()
+    }
+
     suspend fun runAgentTool(
         agent: LlmAgent,
         arguments: Map<String, Any?>,
@@ -135,6 +167,8 @@ class ToolContext internal constructor(
     ): ToolOutput = agentToolExecutor(this, agent, arguments, skipSummarization, includePlugins)
 
     internal fun recordedArtifactDelta(): Map<String, Int> = artifactDelta.toMap()
+
+    internal fun recordedRequestedAuthConfigs(): Map<String, AuthConfig> = requestedAuthConfigs.toMap()
 }
 
 private class LambdaTool(

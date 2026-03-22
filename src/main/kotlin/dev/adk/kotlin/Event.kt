@@ -8,6 +8,7 @@ data class EventActions(
     val skipSummarization: Boolean? = null,
     val stateDelta: Map<String, String?> = emptyMap(),
     val artifactDelta: Map<String, Int> = emptyMap(),
+    val requestedAuthConfigs: Map<String, AuthConfig> = emptyMap(),
     val requestedToolConfirmations: Map<String, ToolConfirmation> = emptyMap(),
     val transferToAgent: String? = null,
     val escalate: Boolean? = null,

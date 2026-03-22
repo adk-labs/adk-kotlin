@@ -43,6 +43,8 @@ but the API shape here follows Kotlin conventions first:
   markers, and an `UnsafeLocalCodeExecutor` retry loop.
 - Tool confirmation foundation so `requiresConfirmation` can drive real runtime
   approval events instead of remaining a passive declaration flag.
+- Auth runtime foundation with `AuthConfig`, `AuthCredential`, and
+  credential-aware `ToolContext` helpers.
 
 ## Current Scope
 
@@ -66,6 +68,7 @@ The repository currently contains the first runnable foundation:
 - Wrapped-agent tool execution with schema-derived tool declarations.
 - Code-executor request preprocessing and local fenced-code execution retries.
 - Runner-level tool confirmation handling with approval metadata on events.
+- Runtime auth request emission plus in-memory credential loading hooks.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -185,6 +188,21 @@ val destructiveTool: Tool =
         confirmationHint = "Confirm file deletion before continuing.",
     ) {
         ToolOutput("deleted")
+    }
+
+val authAwareTool: Tool =
+    tool(
+        name = "call_maps_api",
+        description = "Calls an authenticated maps API.",
+    ) {
+        requestCredential(
+            AuthConfig(
+                authScheme = "api_key",
+                rawAuthCredential = AuthCredential(apiKey = ""),
+                credentialKey = "maps_api",
+            ),
+        )
+        ToolOutput("Authentication required.")
     }
 ```
 

@@ -1140,6 +1140,158 @@ class RunnerTest {
         }
 
     @Test
+    fun `tool context can request credentials and emit auth configs on events`() =
+        runTest {
+            var modelCalls = 0
+
+            val authConfig =
+                AuthConfig(
+                    authScheme = "api_key",
+                    rawAuthCredential = AuthCredential(apiKey = ""),
+                    credentialKey = "maps_api",
+                )
+
+            val authTool =
+                tool(
+                    name = "call_maps_api",
+                    description = "Calls an authenticated maps API.",
+                ) {
+                    requestCredential(authConfig)
+                    ToolOutput("Authentication required.")
+                }
+
+            val app =
+                adkApp("auth-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(authTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("call_maps_api"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("Authentication required.", request.session.transcript.last().text)
+                            ModelResponse.Final("Waiting for auth.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Call the maps API.",
+                )
+
+            assertEquals("Waiting for auth.", result.finalMessage)
+            assertEquals("maps_api", result.events[1].actions.requestedAuthConfigs.values.single().credentialKey)
+            assertEquals("api_key", result.events[1].actions.requestedAuthConfigs.values.single().authScheme)
+        }
+
+    @Test
+    fun `tool context can load stored credentials and auth responses`() =
+        runTest {
+            var modelCalls = 0
+
+            val authConfig =
+                AuthConfig(
+                    authScheme = "api_key",
+                    credentialKey = "maps_api",
+                )
+            val credentialService = InMemoryCredentialService()
+            credentialService.saveCredential(
+                authConfig = authConfig,
+                appName = "auth-app",
+                userId = "user-1",
+                credential = AuthCredential(apiKey = "secret-key"),
+            )
+
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(
+                "auth-app",
+                AgentSession(
+                    id = "session-1",
+                    userId = "user-1",
+                    state =
+                        mapOf(
+                            "temp:maps_api" to AuthCredential(accessToken = "token-123").encodeToState(),
+                        ),
+                ),
+            )
+
+            val authTool =
+                tool(
+                    name = "use_maps_api",
+                    description = "Uses stored credentials.",
+                ) {
+                    val storedCredential = loadCredential(authConfig)
+                    val authResponse = getAuthResponse(authConfig)
+                    remember("loaded_api_key", storedCredential?.apiKey)
+                    remember("loaded_access_token", authResponse?.accessToken)
+                    ToolOutput("${storedCredential?.apiKey}:${authResponse?.accessToken}")
+                }
+
+            val app =
+                adkApp("auth-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(authTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("use_maps_api"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("secret-key", request.session.state["loaded_api_key"])
+                            assertEquals("token-123", request.session.state["loaded_access_token"])
+                            ModelResponse.Final("Loaded credentials.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    sessionStore = sessionStore,
+                    credentialService = credentialService,
+                )
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use stored auth.",
+                )
+
+            assertEquals("Loaded credentials.", result.finalMessage)
+            assertEquals("secret-key:token-123", result.events[1].content?.text)
+        }
+
+    @Test
     fun `runner executes parallel agents in isolated branches and merges by completion order`() =
         runTest {
             val callCounts = mutableMapOf<String, Int>()
