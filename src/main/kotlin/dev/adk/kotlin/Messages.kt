@@ -1,5 +1,6 @@
 package dev.adk.kotlin
 
+import java.io.Serializable
 import java.time.Instant
 
 enum class MessageRole {
@@ -8,7 +9,7 @@ enum class MessageRole {
     TOOL,
 }
 
-sealed interface Message {
+sealed interface Message : Serializable {
     val role: MessageRole
     val text: String
     val timestamp: Instant

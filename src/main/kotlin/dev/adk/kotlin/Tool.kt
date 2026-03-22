@@ -60,6 +60,7 @@ class ToolContext internal constructor(
     val session: AgentSession,
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
+    private val memoryService: MemoryService? = null,
 ) {
     private val artifactDelta = linkedMapOf<String, Int>()
 
@@ -112,6 +113,15 @@ class ToolContext internal constructor(
             userId = session.userId,
             sessionId = session.id,
         )
+
+    suspend fun searchMemory(query: String): SearchMemoryResponse {
+        val service = memoryService ?: error("Memory service is not initialized.")
+        return service.searchMemory(
+            appName = appName,
+            userId = session.userId,
+            query = query,
+        )
+    }
 
     internal fun recordedArtifactDelta(): Map<String, Int> = artifactDelta.toMap()
 }

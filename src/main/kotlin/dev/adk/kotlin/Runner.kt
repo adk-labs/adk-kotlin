@@ -24,6 +24,7 @@ class Runner(
     private val sessionStore: SessionStore = InMemorySessionStore(),
     val artifactService: ArtifactService = InMemoryArtifactService(),
     plugins: List<Plugin> = emptyList(),
+    val memoryService: MemoryService? = null,
 ) {
     private val pluginManager = PluginManager(plugins)
 
@@ -294,6 +295,7 @@ class Runner(
                                 session = workingSession,
                                 workingState = workingState,
                                 artifactService = artifactService,
+                                memoryService = memoryService,
                             )
                         val stateBeforeTool = workingState.toMap()
                         val beforeToolOutput = pluginManager.runBeforeToolCallback(tool, call, context)

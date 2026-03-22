@@ -1,5 +1,6 @@
 package dev.adk.kotlin
 
+import java.io.Serializable
 import java.time.Instant
 import java.util.UUID
 
@@ -11,7 +12,7 @@ data class EventActions(
     val escalate: Boolean? = null,
     val endOfAgent: Boolean? = null,
     val agentState: Map<String, String>? = null,
-)
+) : Serializable
 
 data class Event(
     val invocationId: String,
@@ -23,7 +24,7 @@ data class Event(
     val timestamp: Instant = Instant.now(),
     val partial: Boolean = false,
     val turnComplete: Boolean = false,
-) {
+) : Serializable {
     fun isFinalResponse(): Boolean = actions.endOfAgent == true
 
     companion object {

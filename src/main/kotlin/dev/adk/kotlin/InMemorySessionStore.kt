@@ -42,4 +42,29 @@ class InMemorySessionStore : SessionStore {
             .computeIfAbsent(appName) { ConcurrentHashMap() }
             .computeIfAbsent(session.userId) { ConcurrentHashMap() }[session.id] = session
     }
+
+    override suspend fun list(
+        appName: String,
+        userId: String?,
+    ): List<AgentSession> {
+        val appSessions = sessions[appName].orEmpty()
+        val sessionLists =
+            if (userId != null) {
+                listOfNotNull(appSessions[userId])
+            } else {
+                appSessions.values.toList()
+            }
+
+        return sessionLists
+            .flatMap { it.values }
+            .sortedBy { it.updatedAt }
+    }
+
+    override suspend fun delete(
+        appName: String,
+        userId: String,
+        sessionId: String,
+    ) {
+        sessions[appName]?.get(userId)?.remove(sessionId)
+    }
 }

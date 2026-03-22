@@ -1,5 +1,6 @@
 package dev.adk.kotlin
 
+import java.io.Serializable
 import java.time.Instant
 
 data class AgentSession(
@@ -9,4 +10,4 @@ data class AgentSession(
     val transcript: List<Message> = emptyList(),
     val events: List<Event> = emptyList(),
     val updatedAt: Instant = Instant.now(),
-)
+) : Serializable

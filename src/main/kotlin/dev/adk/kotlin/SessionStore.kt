@@ -17,4 +17,15 @@ interface SessionStore {
         appName: String,
         session: AgentSession,
     )
+
+    suspend fun list(
+        appName: String,
+        userId: String? = null,
+    ): List<AgentSession>
+
+    suspend fun delete(
+        appName: String,
+        userId: String,
+        sessionId: String,
+    )
 }

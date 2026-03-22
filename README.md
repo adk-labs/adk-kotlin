@@ -31,6 +31,8 @@ but the API shape here follows Kotlin conventions first:
   execution, event emission, and run completion.
 - Structured tool schemas and richer declaration metadata for internal and
   user-defined tools.
+- File-backed session/artifact backends and a first-class memory service
+  surface.
 
 ## Current Scope
 
@@ -46,6 +48,7 @@ The repository currently contains the first runnable foundation:
 - First-class runtime events persisted on sessions and returned from runs.
 - A plugin manager and global plugin callbacks integrated into `Runner`.
 - Structured tool schema support for built-in and user-defined tools.
+- Persistent file-backed session/artifact services and in-memory memory search.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -133,6 +136,7 @@ Artifact-backed instructions use the same interpolation path:
 
 ```kotlin
 val artifactService = InMemoryArtifactService()
+val memoryService = InMemoryMemoryService()
 artifactService.saveArtifact(
     appName = "travel-assistant",
     userId = "user-1",
@@ -145,6 +149,7 @@ val runner = Runner(
     app = app,
     model = model,
     artifactService = artifactService,
+    memoryService = memoryService,
 )
 ```
 
@@ -195,6 +200,6 @@ Structured output now follows the official split path as well:
 - Introduce provider modules instead of baking model transports into core.
 - Add richer plugin behaviors such as request mutation and built-in plugins.
 - Add richer tool runtime semantics such as confirmations and toolsets.
-- Add persistent session backends.
+- Add database/cloud session and artifact backends.
 - Align more of the official runtime surface, including broader tool/runtime
   schemas and storage modules.
