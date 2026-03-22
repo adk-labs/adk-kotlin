@@ -63,6 +63,8 @@ but the API shape here follows Kotlin conventions first:
 - Live event streaming via `run(..., onEvent = ...)` and `stream(...)`.
 - Packaged `MultimodalToolResultsPlugin` for official-style tool-to-model
   multimodal chaining.
+- CLI foundation with official-style `AgentLoader`, `AdkCli`, and a reflection
+  based `main(args)` entrypoint.
 
 ## Current Scope
 
@@ -466,6 +468,34 @@ val runner =
 With that plugin enabled, attachment-bearing tool outputs are collected across
 the current invocation and merged into the final conversation message sent to
 the next model call.
+
+CLI-style local execution is now available as a first-class surface too:
+
+```kotlin
+val cli =
+    AdkCli(
+        agentLoader =
+            StaticAgentLoader(
+                mapOf(
+                    "travel-assistant" to LoadedApp(app = app, model = model),
+                ),
+            ),
+    )
+
+runBlocking {
+    cli.runInteractive(
+        CliInteractiveRequest(
+            appName = "travel-assistant",
+            userId = "cli-user",
+            sessionId = "cli-session",
+        ),
+    )
+}
+```
+
+For external JVM apps, the packaged main entrypoint can load a custom
+`AgentLoader` implementation by class name and run a single turn or an
+interactive console session.
 
 ## Near-Term Roadmap
 
