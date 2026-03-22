@@ -43,6 +43,7 @@ class Runner(
     val artifactService: ArtifactService = InMemoryArtifactService(),
     plugins: List<Plugin> = emptyList(),
     val memoryService: MemoryService? = null,
+    private val toolConfirmationHandler: ToolConfirmationHandler? = null,
 ) {
     private val pluginManager = PluginManager(plugins)
 
@@ -587,6 +588,20 @@ class Runner(
                         val tool =
                             agent.tools.find { it.definition.name == call.toolName }
                                 ?: error("Unknown tool requested: ${call.toolName}")
+                        val confirmation =
+                            maybeConfirmToolCall(
+                                agent = agent,
+                                call = call,
+                                tool = tool,
+                                workingSession = workingSession,
+                                invocationContext = invocationContext,
+                                events = events,
+                                transcript = transcript,
+                                toolExecutions = toolExecutions,
+                            )
+                        if (confirmation?.confirmed == false) {
+                            return@forEach
+                        }
 
                         val context =
                             ToolContext(
@@ -596,6 +611,7 @@ class Runner(
                                 workingState = workingState,
                                 artifactService = artifactService,
                                 memoryService = memoryService,
+                                toolConfirmation = confirmation,
                                 agentToolExecutor = { toolContext, toolAgent, arguments, skipSummarization, includePlugins ->
                                     executeAgentTool(
                                         toolContext = toolContext,
@@ -657,6 +673,84 @@ class Runner(
         }
 
         error("Agent ${agent.name} exceeded maxIterations=${agent.maxIterations}.")
+    }
+
+    private suspend fun maybeConfirmToolCall(
+        agent: LlmAgent,
+        call: ToolCall,
+        tool: Tool,
+        workingSession: AgentSession,
+        invocationContext: InvocationContext,
+        events: MutableList<Event>,
+        transcript: MutableList<Message>,
+        toolExecutions: MutableList<ToolExecution>,
+    ): ToolConfirmation? {
+        if (!tool.definition.requiresConfirmation) {
+            return null
+        }
+
+        val callId = UUID.randomUUID().toString()
+        val suggestedConfirmation =
+            ToolConfirmation(
+                hint = tool.definition.confirmationHint,
+                payload = call.arguments.takeIf { arguments -> arguments.isNotEmpty() },
+            )
+        val resolvedConfirmation =
+            toolConfirmationHandler?.confirm(
+                ToolConfirmationRequest(
+                    callId = callId,
+                    agentName = agent.name,
+                    tool = tool.definition,
+                    toolCall = call,
+                    session = workingSession,
+                    suggestedConfirmation = suggestedConfirmation,
+                ),
+            ) ?: suggestedConfirmation
+
+        val confirmationMessage =
+            when {
+                resolvedConfirmation.confirmed -> "Tool ${tool.definition.name} confirmed."
+                toolConfirmationHandler != null -> "Tool ${tool.definition.name} was not approved."
+                else -> "Tool ${tool.definition.name} requires confirmation."
+            }
+        emitEvent(
+            invocationContext = invocationContext,
+            events = events,
+            event =
+                Event(
+                    invocationId = invocationContext.invocationId,
+                    author = agent.name,
+                    content =
+                        ToolMessage(
+                            toolName = tool.definition.name,
+                            text = confirmationMessage,
+                        ),
+                    actions =
+                        EventActions(
+                            requestedToolConfirmations = mapOf(callId to resolvedConfirmation),
+                        ),
+                    branch = app.branchOf(agent),
+                ),
+            transcript = transcript,
+        )
+
+        if (!resolvedConfirmation.confirmed) {
+            toolExecutions +=
+                ToolExecution(
+                    agentName = agent.name,
+                    call = call,
+                    output =
+                        ToolOutput(
+                            content = confirmationMessage,
+                            metadata =
+                                mapOf(
+                                    "confirmation" to if (toolConfirmationHandler != null) "denied" else "pending",
+                                ),
+                        ),
+                )
+        }
+
+        return resolvedConfirmation
     }
 
     private suspend fun maybeExecuteCodeBlock(
@@ -900,6 +994,7 @@ class Runner(
                 artifactService = artifactService,
                 plugins = if (includePlugins) pluginManager.snapshotPlugins() else emptyList(),
                 memoryService = memoryService,
+                toolConfirmationHandler = toolConfirmationHandler,
             )
 
         val result =

@@ -41,6 +41,8 @@ but the API shape here follows Kotlin conventions first:
 - Agent-as-tool support with `inputSchema` and `AgentTool`.
 - Code executor foundations with official-style `codeExecutor`, built-in model
   markers, and an `UnsafeLocalCodeExecutor` retry loop.
+- Tool confirmation foundation so `requiresConfirmation` can drive real runtime
+  approval events instead of remaining a passive declaration flag.
 
 ## Current Scope
 
@@ -63,6 +65,7 @@ The repository currently contains the first runnable foundation:
 - Controlled transcript inclusion and session-state output persistence.
 - Wrapped-agent tool execution with schema-derived tool declarations.
 - Code-executor request preprocessing and local fenced-code execution retries.
+- Runner-level tool confirmation handling with approval metadata on events.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -172,6 +175,16 @@ val analyst: Agent =
                 timeoutSeconds = 10,
                 errorRetryAttempts = 2,
             )
+    }
+
+val destructiveTool: Tool =
+    tool(
+        name = "delete_files",
+        description = "Deletes files from disk.",
+        requiresConfirmation = true,
+        confirmationHint = "Confirm file deletion before continuing.",
+    ) {
+        ToolOutput("deleted")
     }
 ```
 

@@ -15,6 +15,7 @@ data class ToolDefinition(
     val parameters: List<ToolParameter> = emptyList(),
     val isLongRunning: Boolean = false,
     val requiresConfirmation: Boolean = false,
+    val confirmationHint: String = "",
     val customMetadata: Map<String, Any?> = emptyMap(),
 )
 
@@ -62,6 +63,7 @@ class ToolContext internal constructor(
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
     private val memoryService: MemoryService? = null,
+    val toolConfirmation: ToolConfirmation? = null,
     private val agentToolExecutor: suspend (ToolContext, LlmAgent, Map<String, Any?>, Boolean, Boolean) -> ToolOutput,
 ) {
     private val artifactDelta = linkedMapOf<String, Int>()
@@ -175,6 +177,7 @@ fun tool(
     parameters: List<ToolParameter> = emptyList(),
     isLongRunning: Boolean = false,
     requiresConfirmation: Boolean = false,
+    confirmationHint: String = "",
     customMetadata: Map<String, Any?> = emptyMap(),
     block: suspend ToolContext.(ToolCall) -> ToolOutput,
 ): Tool =
@@ -187,6 +190,7 @@ fun tool(
             parameters = parameters,
             isLongRunning = isLongRunning,
             requiresConfirmation = requiresConfirmation,
+            confirmationHint = confirmationHint,
             customMetadata = customMetadata,
         ),
         block = block,

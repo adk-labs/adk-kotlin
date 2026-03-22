@@ -1005,6 +1005,141 @@ class RunnerTest {
         }
 
     @Test
+    fun `runner requests confirmation for protected tools and skips execution without approval`() =
+        runTest {
+            var modelCalls = 0
+            var toolRuns = 0
+
+            val dangerousTool =
+                tool(
+                    name = "delete_files",
+                    description = "Deletes files from disk.",
+                    requiresConfirmation = true,
+                    confirmationHint = "Confirm file deletion before continuing.",
+                ) {
+                    toolRuns += 1
+                    remember("deleted", "true")
+                    ToolOutput("deleted")
+                }
+
+            val app =
+                adkApp("confirm-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(dangerousTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("delete_files"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("Tool delete_files requires confirmation.", request.session.transcript.last().text)
+                            ModelResponse.Final("Waiting for confirmation.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Delete the files.",
+                )
+
+            assertEquals(0, toolRuns)
+            assertEquals("Waiting for confirmation.", result.finalMessage)
+            assertEquals("pending", result.toolExecutions.single().output.metadata["confirmation"])
+            assertEquals(
+                "Confirm file deletion before continuing.",
+                result.events[1].actions.requestedToolConfirmations.values.single().hint,
+            )
+            assertEquals(false, result.events[1].actions.requestedToolConfirmations.values.single().confirmed)
+        }
+
+    @Test
+    fun `runner executes confirmation-protected tools when handler approves`() =
+        runTest {
+            var modelCalls = 0
+
+            val dangerousTool =
+                tool(
+                    name = "delete_files",
+                    description = "Deletes files from disk.",
+                    requiresConfirmation = true,
+                    confirmationHint = "Confirm file deletion before continuing.",
+                ) {
+                    assertEquals(true, toolConfirmation?.confirmed)
+                    remember("deleted", "true")
+                    ToolOutput("deleted")
+                }
+
+            val app =
+                adkApp("confirm-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(dangerousTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("delete_files"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("true", request.session.state["deleted"])
+                            ModelResponse.Final("Deletion completed.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    toolConfirmationHandler =
+                        ToolConfirmationHandler { request ->
+                            request.suggestedConfirmation.copy(
+                                confirmed = true,
+                                payload = mapOf("approvedBy" to "system"),
+                            )
+                        },
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Delete the files.",
+                )
+
+            assertEquals("Deletion completed.", result.finalMessage)
+            assertEquals(4, result.events.size)
+            assertEquals(true, result.events[1].actions.requestedToolConfirmations.values.single().confirmed)
+            assertEquals("deleted", result.toolExecutions.single().output.content)
+        }
+
+    @Test
     fun `runner executes parallel agents in isolated branches and merges by completion order`() =
         runTest {
             val callCounts = mutableMapOf<String, Int>()
