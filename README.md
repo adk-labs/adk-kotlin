@@ -65,6 +65,8 @@ but the API shape here follows Kotlin conventions first:
   multimodal chaining.
 - CLI foundation with official-style `AgentLoader`, `AdkCli`, and a reflection
   based `main(args)` entrypoint.
+- Dev server foundation with `AdkWebServer`, session endpoints, JSON `/run`,
+  and SSE `/run_sse`.
 
 ## Current Scope
 
@@ -496,6 +498,26 @@ runBlocking {
 For external JVM apps, the packaged main entrypoint can load a custom
 `AgentLoader` implementation by class name and run a single turn or an
 interactive console session.
+
+There is now a matching local web/dev surface as well:
+
+```kotlin
+val server =
+    AdkWebServer(
+        agentLoader =
+            StaticAgentLoader(
+                mapOf(
+                    "travel-assistant" to LoadedApp(app = app, model = model),
+                ),
+            ),
+    ).start()
+
+println(server.baseUrl)
+```
+
+The current foundation exposes app listing, session lifecycle routes, a JSON
+`POST /run`, and an SSE `POST /run_sse` endpoint on top of the same `Runner`
+semantics.
 
 ## Near-Term Roadmap
 

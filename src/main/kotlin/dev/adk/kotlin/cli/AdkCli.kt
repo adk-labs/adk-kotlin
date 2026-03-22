@@ -31,6 +31,8 @@ data class LoadedApp(
 
 interface AgentLoader {
     fun loadAgent(appName: String): LoadedApp
+
+    fun listAgents(): List<String> = emptyList()
 }
 
 class StaticAgentLoader(
@@ -38,6 +40,8 @@ class StaticAgentLoader(
 ) : AgentLoader {
     override fun loadAgent(appName: String): LoadedApp =
         loadedApps[appName] ?: error("Unknown app: $appName")
+
+    override fun listAgents(): List<String> = loadedApps.keys.sorted()
 }
 
 data class CliRunRequest(
