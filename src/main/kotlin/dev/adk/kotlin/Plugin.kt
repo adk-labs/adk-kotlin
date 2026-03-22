@@ -20,6 +20,11 @@ interface Plugin {
         runResult: RunResult,
     ) {}
 
+    suspend fun processLlmRequest(
+        callbackContext: CallbackContext,
+        llmRequest: LlmRequest,
+    ): LlmRequest = llmRequest
+
     suspend fun beforeModelCallback(
         callbackContext: CallbackContext,
         llmRequest: LlmRequest,

@@ -1991,4 +1991,114 @@ class RunnerTest {
             assertEquals("load_artifacts", result.toolExecutions.single().call.toolName)
             assertTrue(result.toolExecutions.single().output.content.contains("Quarterly summary"))
         }
+
+    @Test
+    fun `plugins can rewrite llm requests before model execution`() =
+        runTest {
+            val firstPlugin =
+                object : BasePlugin("first_plugin") {
+                    override suspend fun processLlmRequest(
+                        callbackContext: CallbackContext,
+                        llmRequest: LlmRequest,
+                    ): LlmRequest =
+                        llmRequest.copy(
+                            systemInstructions = llmRequest.systemInstructions + "first_plugin_instruction",
+                        )
+                }
+
+            val secondPlugin =
+                object : BasePlugin("second_plugin") {
+                    override suspend fun processLlmRequest(
+                        callbackContext: CallbackContext,
+                        llmRequest: LlmRequest,
+                    ): LlmRequest =
+                        llmRequest.copy(
+                            systemInstructions = llmRequest.systemInstructions + "second_plugin_instruction",
+                        )
+                }
+
+            val app =
+                adkApp("plugin-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertEquals(
+                        listOf("first_plugin_instruction", "second_plugin_instruction"),
+                        request.systemInstructions.takeLast(2),
+                    )
+                    ModelResponse.Final("Mutated request.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins = listOf(firstPlugin, secondPlugin),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Mutate this request.",
+                )
+
+            assertEquals("Mutated request.", result.finalMessage)
+        }
+
+    @Test
+    fun `global instruction plugin prepends injected instructions`() =
+        runTest {
+            val sessionStore = InMemorySessionStore()
+            sessionStore.save(
+                "plugin-app",
+                AgentSession(
+                    id = "session-1",
+                    userId = "user-1",
+                    state = mapOf("user:name" to "Jaichang"),
+                ),
+            )
+
+            val app =
+                adkApp("plugin-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertEquals("Speak to Jaichang politely.", request.systemInstructions.first())
+                    assertTrue(
+                        request.systemInstruction
+                            .orEmpty()
+                            .contains("Your internal name is \"planner\""),
+                    )
+                    ModelResponse.Final("Used plugin global instruction.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    sessionStore = sessionStore,
+                    plugins =
+                        listOf(
+                            globalInstructionPlugin("Speak to {user:name} politely."),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use the plugin instruction.",
+                )
+
+            assertEquals("Used plugin global instruction.", result.finalMessage)
+        }
 }

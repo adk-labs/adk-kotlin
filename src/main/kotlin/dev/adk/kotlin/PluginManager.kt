@@ -50,6 +50,17 @@ class PluginManager(
         }
     }
 
+    suspend fun runProcessLlmRequestCallback(
+        callbackContext: CallbackContext,
+        llmRequest: LlmRequest,
+    ): LlmRequest {
+        var currentRequest = llmRequest
+        plugins.forEach { plugin ->
+            currentRequest = plugin.processLlmRequest(callbackContext, currentRequest)
+        }
+        return currentRequest
+    }
+
     suspend fun runBeforeModelCallback(
         callbackContext: CallbackContext,
         llmRequest: LlmRequest,

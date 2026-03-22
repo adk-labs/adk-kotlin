@@ -51,6 +51,8 @@ but the API shape here follows Kotlin conventions first:
   and grouped tool modules.
 - Official-style built-in utility tools for `loadMemory`, `preloadMemory`, and
   `loadArtifacts`, including request preprocessing hooks.
+- Plugin request mutation plus `GlobalInstructionPlugin` for official-style
+  before-model instruction prepending on immutable requests.
 
 ## Current Scope
 
@@ -80,6 +82,8 @@ The repository currently contains the first runnable foundation:
   runtime.
 - Built-in memory/artifact utility tools wired into the same request-building
   pipeline as official ADK preprocessors.
+- Plugin-level request rewriting before model execution, including a packaged
+  `GlobalInstructionPlugin`.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -221,6 +225,11 @@ val memoryAwareAgent: Agent =
         model = "gemini-2.5-pro"
         tools(loadMemory, preloadMemory, loadArtifacts)
     }
+
+val runtimePlugins =
+    listOf(
+        globalInstructionPlugin("Speak to {user:name} politely."),
+    )
 
 val publishTool: Tool =
     tool(

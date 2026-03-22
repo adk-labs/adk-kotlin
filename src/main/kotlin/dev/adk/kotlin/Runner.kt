@@ -75,6 +75,7 @@ class Runner(
                 userId = userId,
                 invocationId = invocationId,
                 rootAgent = rootAgent,
+                artifactService = artifactService,
             ) {
                 baseSession.copy(
                     state = workingState.toMap(),
@@ -388,13 +389,15 @@ class Runner(
                 )
             val plannedRequest = agent.planner?.prepareRequest(workingSession, preprocessedRequest) ?: preprocessedRequest
             val finalRequest = agent.codeExecutor?.processLlmRequest(plannedRequest) ?: plannedRequest
+            val pluginPreparedRequest =
+                pluginManager.runProcessLlmRequestCallback(callbackContext, finalRequest)
 
             val response =
-                pluginManager.runBeforeModelCallback(callbackContext, finalRequest)
+                pluginManager.runBeforeModelCallback(callbackContext, pluginPreparedRequest)
                     ?: try {
-                        model.generate(finalRequest)
+                        model.generate(pluginPreparedRequest)
                     } catch (error: Throwable) {
-                        pluginManager.runOnModelErrorCallback(callbackContext, finalRequest, error) ?: throw error
+                        pluginManager.runOnModelErrorCallback(callbackContext, pluginPreparedRequest, error) ?: throw error
                     }
             val plannerProcessedResponse = agent.planner?.processPlanningResponse(response) ?: response
             val responseAfterPlugins =

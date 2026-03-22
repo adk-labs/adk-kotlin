@@ -5,6 +5,7 @@ class InvocationContext internal constructor(
     val userId: String,
     val invocationId: String,
     val rootAgent: LlmAgent,
+    val artifactService: ArtifactService,
     private val sessionProvider: () -> AgentSession,
 ) {
     val session: AgentSession
@@ -17,6 +18,9 @@ class CallbackContext internal constructor(
 ) {
     val app: AdkApp
         get() = invocationContext.app
+
+    val artifactService: ArtifactService
+        get() = invocationContext.artifactService
 
     val invocationId: String
         get() = invocationContext.invocationId
