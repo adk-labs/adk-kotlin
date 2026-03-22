@@ -657,6 +657,7 @@ class Runner(
                                                 stateDelta = computeStateDelta(stateBeforeTool, workingState),
                                                 artifactDelta = context.recordedArtifactDelta(),
                                                 requestedAuthConfigs = context.recordedRequestedAuthConfigs(),
+                                                requestedToolConfirmations = context.recordedRequestedToolConfirmations(),
                                             ),
                                         branch = app.branchOf(agent),
                                     ),

@@ -45,6 +45,8 @@ but the API shape here follows Kotlin conventions first:
   approval events instead of remaining a passive declaration flag.
 - Auth runtime foundation with `AuthConfig`, `AuthCredential`, and
   credential-aware `ToolContext` helpers.
+- Official-style `ToolContext.requestConfirmation(...)` so tools can ask for
+  approval directly during execution.
 
 ## Current Scope
 
@@ -69,6 +71,7 @@ The repository currently contains the first runnable foundation:
 - Code-executor request preprocessing and local fenced-code execution retries.
 - Runner-level tool confirmation handling with approval metadata on events.
 - Runtime auth request emission plus in-memory credential loading hooks.
+- Tool-driven confirmation requests propagated on emitted tool events.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -203,6 +206,18 @@ val authAwareTool: Tool =
             ),
         )
         ToolOutput("Authentication required.")
+    }
+
+val publishTool: Tool =
+    tool(
+        name = "publish_report",
+        description = "Publishes a report to users.",
+    ) {
+        requestConfirmation(
+            hint = "Confirm publishing the report to all users.",
+            payload = mapOf("audience" to "all"),
+        )
+        ToolOutput("Publish confirmation requested.")
     }
 ```
 

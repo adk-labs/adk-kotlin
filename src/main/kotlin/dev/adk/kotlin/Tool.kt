@@ -70,6 +70,7 @@ class ToolContext internal constructor(
 ) {
     private val artifactDelta = linkedMapOf<String, Int>()
     private val requestedAuthConfigs = linkedMapOf<String, AuthConfig>()
+    private val requestedToolConfirmations = linkedMapOf<String, ToolConfirmation>()
 
     val state: MutableMap<String, String>
         get() = workingState
@@ -159,6 +160,26 @@ class ToolContext internal constructor(
         requestedAuthConfigs[callId] = AuthHandler(authConfig).generateAuthRequest()
     }
 
+    fun requestConfirmation(
+        hint: String? = null,
+        payload: Any? = null,
+    ) {
+        val callId = requireNotNull(functionCallId) { "requestConfirmation requires a function call id." }
+        requestedToolConfirmations[callId] =
+            ToolConfirmation(
+                hint = hint.orEmpty(),
+                payload = payload,
+            )
+    }
+
+    fun requestConfirmation(hint: String) {
+        requestConfirmation(hint = hint, payload = null)
+    }
+
+    fun requestConfirmation() {
+        requestConfirmation(hint = null, payload = null)
+    }
+
     suspend fun runAgentTool(
         agent: LlmAgent,
         arguments: Map<String, Any?>,
@@ -169,6 +190,8 @@ class ToolContext internal constructor(
     internal fun recordedArtifactDelta(): Map<String, Int> = artifactDelta.toMap()
 
     internal fun recordedRequestedAuthConfigs(): Map<String, AuthConfig> = requestedAuthConfigs.toMap()
+
+    internal fun recordedRequestedToolConfirmations(): Map<String, ToolConfirmation> = requestedToolConfirmations.toMap()
 }
 
 private class LambdaTool(

@@ -1292,6 +1292,70 @@ class RunnerTest {
         }
 
     @Test
+    fun `tool context can request confirmation directly during tool execution`() =
+        runTest {
+            var modelCalls = 0
+
+            val toolThatRequestsConfirmation =
+                tool(
+                    name = "publish_report",
+                    description = "Publishes a report to users.",
+                ) {
+                    requestConfirmation(
+                        hint = "Confirm publishing the report to all users.",
+                        payload = mapOf("audience" to "all"),
+                    )
+                    ToolOutput("Publish confirmation requested.")
+                }
+
+            val app =
+                adkApp("tool-confirmation-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(toolThatRequestsConfirmation)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+                    when (modelCalls) {
+                        1 ->
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall("publish_report"),
+                                ),
+                            )
+
+                        2 -> {
+                            assertEquals("Publish confirmation requested.", request.session.transcript.last().text)
+                            ModelResponse.Final("Waiting on publish confirmation.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Publish the report.",
+                )
+
+            assertEquals("Waiting on publish confirmation.", result.finalMessage)
+            assertEquals(
+                "Confirm publishing the report to all users.",
+                result.events[1].actions.requestedToolConfirmations.values.single().hint,
+            )
+            assertEquals(
+                false,
+                result.events[1].actions.requestedToolConfirmations.values.single().confirmed,
+            )
+        }
+
+    @Test
     fun `runner executes parallel agents in isolated branches and merges by completion order`() =
         runTest {
             val callCounts = mutableMapOf<String, Int>()
