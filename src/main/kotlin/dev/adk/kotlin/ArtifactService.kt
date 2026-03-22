@@ -25,6 +25,12 @@ interface ArtifactService {
         filename: String,
         version: Int? = null,
     ): Artifact?
+
+    suspend fun listArtifactKeys(
+        appName: String,
+        userId: String,
+        sessionId: String? = null,
+    ): List<String>
 }
 
 class InMemoryArtifactService : ArtifactService {
@@ -63,6 +69,15 @@ class InMemoryArtifactService : ArtifactService {
         } else {
             versions.firstOrNull { artifact -> artifact.version == version }
         }
+    }
+
+    override suspend fun listArtifactKeys(
+        appName: String,
+        userId: String,
+        sessionId: String?,
+    ): List<String> {
+        val scope = ArtifactScope(appName = appName, userId = userId, sessionId = sessionId)
+        return storage[scope]?.keys?.sorted().orEmpty()
     }
 
     private data class ArtifactScope(

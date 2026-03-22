@@ -172,6 +172,7 @@ class Runner(
                                 agent = activeAgent,
                                 session = workingSession,
                                 workingState = workingState,
+                                artifactService = artifactService,
                             )
                         val output = tool.execute(call, context)
 

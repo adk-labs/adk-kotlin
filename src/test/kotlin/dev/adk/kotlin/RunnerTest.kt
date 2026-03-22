@@ -344,4 +344,88 @@ class RunnerTest {
             )
             assertEquals("planner", result.finalAgentName)
         }
+
+    @Test
+    fun `tool-saved artifacts are available to later instruction interpolation`() =
+        runTest {
+            var modelCalls = 0
+
+            val saveKnowledgeTool =
+                tool(
+                    name = "save_knowledge",
+                    description = "Persist knowledge for later turns.",
+                ) {
+                    saveArtifact(
+                        filename = "knowledge.txt",
+                        artifact = Artifact("This is my artifact content."),
+                    )
+                    ToolOutput("saved")
+                }
+
+            val app =
+                adkApp("knowledge-app") {
+                    globalInstruction("Knowledge: {artifact.knowledge.txt?}")
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        tool(saveKnowledgeTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+
+                    when (modelCalls) {
+                        1 -> {
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains("Knowledge: "),
+                            )
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains("Knowledge: This is my artifact content.")
+                                    .not(),
+                            )
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "save_knowledge",
+                                    ),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains("Knowledge: This is my artifact content."),
+                            )
+                            ModelResponse.Final("Used saved artifact.")
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Save and use the knowledge.",
+                )
+
+            assertEquals("Used saved artifact.", result.finalMessage)
+            assertEquals("planner", result.finalAgentName)
+            assertEquals("save_knowledge", result.toolExecutions.single().call.toolName)
+            assertEquals(listOf("knowledge.txt"), runner.artifactService.listArtifactKeys("knowledge-app", "user-1", "session-1"))
+            assertEquals(
+                Artifact("This is my artifact content.", version = 0),
+                runner.artifactService.loadArtifact("knowledge-app", "user-1", "session-1", "knowledge.txt"),
+            )
+        }
 }

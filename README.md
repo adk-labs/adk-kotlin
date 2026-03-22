@@ -86,6 +86,22 @@ With that runner, instructions such as
 `globalInstruction("Use this context: {artifact.knowledge.txt}")` are resolved
 through the artifact service before the model call.
 
+Tools can also participate in that loop directly:
+
+```kotlin
+val persistKnowledge =
+    tool(
+        name = "persist_knowledge",
+        description = "Save reusable context as an artifact.",
+    ) {
+        saveArtifact("knowledge.txt", Artifact("Seoul neighborhoods summary"))
+        ToolOutput("saved")
+    }
+```
+
+Artifacts saved from a tool are scoped to the current app/user/session and are
+available to later turns through `{artifact.filename}` interpolation.
+
 The system instruction passed to the model is not improvised from that DSL.
 The Kotlin runtime now follows the official ADK layering:
 

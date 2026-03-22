@@ -30,6 +30,7 @@ class ToolContext internal constructor(
     val agent: LlmAgent,
     val session: AgentSession,
     private val workingState: MutableMap<String, String>,
+    private val artifactService: ArtifactService,
 ) {
     fun remember(key: String, value: String?) {
         if (value == null) {
@@ -42,6 +43,37 @@ class ToolContext internal constructor(
     fun recall(key: String): String? = workingState[key]
 
     fun snapshot(): Map<String, String> = workingState.toMap()
+
+    suspend fun saveArtifact(
+        filename: String,
+        artifact: Artifact,
+    ): Int =
+        artifactService.saveArtifact(
+            appName = appName,
+            userId = session.userId,
+            sessionId = session.id,
+            filename = filename,
+            artifact = artifact,
+        )
+
+    suspend fun loadArtifact(
+        filename: String,
+        version: Int? = null,
+    ): Artifact? =
+        artifactService.loadArtifact(
+            appName = appName,
+            userId = session.userId,
+            sessionId = session.id,
+            filename = filename,
+            version = version,
+        )
+
+    suspend fun listArtifacts(): List<String> =
+        artifactService.listArtifactKeys(
+            appName = appName,
+            userId = session.userId,
+            sessionId = session.id,
+        )
 }
 
 private class LambdaTool(
