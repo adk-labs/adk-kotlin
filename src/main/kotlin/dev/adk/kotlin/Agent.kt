@@ -90,6 +90,7 @@ data class LlmAgent(
     val description: String = "",
     val instruction: InstructionTemplate? = null,
     val staticInstruction: String? = null,
+    val outputSchema: OutputSchema? = null,
     val tools: List<Tool> = emptyList(),
     val subAgents: List<LlmAgent> = emptyList(),
     val maxIterations: Int = 8,

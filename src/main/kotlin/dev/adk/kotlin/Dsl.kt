@@ -51,6 +51,7 @@ class LlmAgentDsl internal constructor(
     private val subAgents = mutableListOf<LlmAgent>()
     private var instructionBypassesStateInjection: Boolean = false
     private var staticInstructionText: String? = null
+    private var outputSchema: OutputSchema? = null
 
     fun instruction(
         line: String,
@@ -69,6 +70,10 @@ class LlmAgentDsl internal constructor(
 
     fun staticInstruction(text: String) {
         staticInstructionText = text.trim()
+    }
+
+    fun outputSchema(block: OutputSchemaDsl.() -> Unit) {
+        outputSchema = OutputSchemaDsl().apply(block).build()
     }
 
     fun tool(tool: Tool) {
@@ -95,6 +100,7 @@ class LlmAgentDsl internal constructor(
                         )
                     },
             staticInstruction = staticInstructionText,
+            outputSchema = outputSchema,
             tools = tools.toList(),
             subAgents = subAgents.toList(),
             maxIterations = maxIterations,

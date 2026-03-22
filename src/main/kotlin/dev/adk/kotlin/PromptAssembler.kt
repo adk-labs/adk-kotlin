@@ -3,12 +3,18 @@ package dev.adk.kotlin
 internal object PromptAssembler {
     private val placeholderPattern = Regex("\\{+[^{}]*}+")
     private val validPrefixes = setOf("app:", "user:", "temp:")
+    internal const val SET_MODEL_RESPONSE_INSTRUCTION =
+        "IMPORTANT: You have access to other tools, but you must provide your final response " +
+            "using the set_model_response tool with the required structured format. After using " +
+            "any other tools needed to complete the task, always call set_model_response with " +
+            "your final answer in the specified schema format."
 
     fun createRequest(
         app: AdkApp,
         agent: LlmAgent,
         session: AgentSession,
         transcript: List<Message>,
+        includeOutputSchemaWorkaround: Boolean = false,
     ): ModelRequest {
         val systemInstructions = mutableListOf<String>()
 
@@ -33,6 +39,10 @@ internal object PromptAssembler {
 
         systemInstructions += identityInstruction(agent)
 
+        if (includeOutputSchemaWorkaround) {
+            systemInstructions += SET_MODEL_RESPONSE_INSTRUCTION
+        }
+
         val transferTargets = app.transferTargetsOf(agent)
         if (transferTargets.isNotEmpty()) {
             systemInstructions += buildTransferInstructions(agent, app, transferTargets)
@@ -49,7 +59,12 @@ internal object PromptAssembler {
                 } else {
                     transcript
                 },
-            availableTools = buildAvailableTools(agent, transferTargets),
+            availableTools =
+                buildAvailableTools(
+                    agent = agent,
+                    transferTargets = transferTargets,
+                    includeOutputSchemaWorkaround = includeOutputSchemaWorkaround,
+                ),
         )
     }
 
@@ -200,8 +215,22 @@ internal object PromptAssembler {
     private fun buildAvailableTools(
         agent: LlmAgent,
         transferTargets: List<LlmAgent>,
+        includeOutputSchemaWorkaround: Boolean,
     ): List<ToolDefinition> {
         val tools = agent.tools.map { it.definition }.toMutableList()
+
+        if (includeOutputSchemaWorkaround) {
+            val outputSchema = requireNotNull(agent.outputSchema) { "outputSchema must be set when workaround is enabled." }
+            tools +=
+                ToolDefinition(
+                    name = Runner.SET_MODEL_RESPONSE_TOOL,
+                    description =
+                        "Set your final response using the required output schema. " +
+                            "After using any other tools needed to complete the task, always call " +
+                            "set_model_response with your final answer in the specified schema format.",
+                    parameters = outputSchema.fields,
+                )
+        }
 
         if (transferTargets.isNotEmpty()) {
             tools +=

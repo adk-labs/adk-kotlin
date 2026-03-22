@@ -97,4 +97,42 @@ class PromptAssemblerTest {
         assertEquals("Dynamic greeting for Alice.", request.conversation[1].text)
         assertTrue(request.conversation[1] is UserMessage)
     }
+
+    @Test
+    fun `adds set_model_response workaround when output schema and tools are combined`() {
+        val weatherTool =
+            tool(
+                name = "lookup_weather",
+                description = "Resolve current weather for a city.",
+            ) {
+                ToolOutput("sunny")
+            }
+
+        val app =
+            adkApp("structured-app") {
+                rootAgent("planner") {
+                    model = "gemini-2.5-pro"
+                    instruction("Use tools before answering.")
+                    outputSchema {
+                        field("city", "Resolved city name")
+                        field("summary", "Final weather summary")
+                    }
+                    tool(weatherTool)
+                }
+            }
+
+        val request =
+            PromptAssembler.createRequest(
+                app = app,
+                agent = app.rootAgent,
+                session = AgentSession(id = "session-1", userId = "user-1"),
+                transcript = listOf(UserMessage("Summarize the weather.")),
+                includeOutputSchemaWorkaround = true,
+            )
+
+        assertEquals(PromptAssembler.SET_MODEL_RESPONSE_INSTRUCTION, request.systemInstructions[2])
+        val setModelResponseTool = request.availableTools.firstOrNull { it.name == Runner.SET_MODEL_RESPONSE_TOOL }
+        assertNotNull(setModelResponseTool)
+        assertEquals(listOf("city", "summary"), setModelResponseTool.parameters.map { it.name })
+    }
 }

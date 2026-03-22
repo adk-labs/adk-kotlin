@@ -71,6 +71,7 @@ class RunnerTest {
 
             assertEquals("Seoul is sunny today.", result.finalMessage)
             assertEquals("planner", result.finalAgentName)
+            assertEquals(null, result.structuredResponse)
             assertEquals(1, result.toolExecutions.size)
             assertEquals("planner", result.toolExecutions.single().agentName)
             assertEquals("Seoul", result.session.state["last_city"])
@@ -146,5 +147,94 @@ class RunnerTest {
             assertEquals("researcher", result.finalAgentName)
             assertEquals(Runner.TRANSFER_TO_AGENT_TOOL, result.toolExecutions.single().call.toolName)
             assertEquals("coordinator", result.toolExecutions.single().agentName)
+        }
+
+    @Test
+    fun `runner treats set_model_response as the final structured result`() =
+        runTest {
+            var modelCalls = 0
+
+            val weatherTool =
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) { call ->
+                    val city = call.requireArgument("city")
+                    ToolOutput("$city is sunny")
+                }
+
+            val app =
+                adkApp("structured-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        instruction("Use tools before answering.")
+                        outputSchema {
+                            field("city", "Resolved city name")
+                            field("summary", "Final weather summary")
+                        }
+                        tool(weatherTool)
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    modelCalls += 1
+
+                    when (modelCalls) {
+                        1 -> {
+                            assertTrue(request.availableTools.any { it.name == Runner.SET_MODEL_RESPONSE_TOOL })
+                            assertTrue(
+                                request.systemInstruction
+                                    .orEmpty()
+                                    .contains(PromptAssembler.SET_MODEL_RESPONSE_INSTRUCTION),
+                            )
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = "lookup_weather",
+                                        arguments = mapOf("city" to "Seoul"),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        2 -> {
+                            ModelResponse.ToolCalls(
+                                listOf(
+                                    ToolCall(
+                                        toolName = Runner.SET_MODEL_RESPONSE_TOOL,
+                                        arguments =
+                                            mapOf(
+                                                "city" to "Seoul",
+                                                "summary" to "Seoul is sunny today.",
+                                            ),
+                                    ),
+                                ),
+                            )
+                        }
+
+                        else -> error("Unexpected model invocation.")
+                    }
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Summarize the weather in Seoul.",
+                )
+
+            assertEquals("planner", result.finalAgentName)
+            assertEquals(
+                mapOf("city" to "Seoul", "summary" to "Seoul is sunny today."),
+                result.structuredResponse,
+            )
+            assertEquals(
+                "{city=Seoul, summary=Seoul is sunny today.}",
+                result.finalMessage,
+            )
+            assertEquals(Runner.SET_MODEL_RESPONSE_TOOL, result.toolExecutions.last().call.toolName)
         }
 }

@@ -69,4 +69,4 @@ fun tool(
     )
 
 fun ToolCall.requireArgument(name: String): String =
-    arguments[name] ?: error("Missing required tool argument: $name")
+    arguments[name]?.toString() ?: error("Missing required tool argument: $name")

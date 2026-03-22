@@ -12,6 +12,7 @@ data class RunResult(
     val session: AgentSession,
     val finalMessage: String,
     val finalAgentName: String,
+    val structuredResponse: Any? = null,
     val toolExecutions: List<ToolExecution>,
 )
 
@@ -22,6 +23,7 @@ class Runner(
 ) {
     internal companion object {
         const val TRANSFER_TO_AGENT_TOOL = "transfer_to_agent"
+        const val SET_MODEL_RESPONSE_TOOL = "set_model_response"
     }
 
     suspend fun run(
@@ -54,6 +56,7 @@ class Runner(
                         agent = activeAgent,
                         session = workingSession,
                         transcript = transcript,
+                        includeOutputSchemaWorkaround = shouldUseOutputSchemaWorkaround(activeAgent),
                     ),
                 )
 
@@ -71,6 +74,7 @@ class Runner(
                         session = savedSession,
                         finalMessage = response.message,
                         finalAgentName = activeAgent.name,
+                        structuredResponse = null,
                         toolExecutions = toolExecutions.toList(),
                     )
                 }
@@ -110,6 +114,42 @@ class Runner(
                         return@repeat
                     }
 
+                    val setModelResponseCall = response.calls.singleOrNull { it.toolName == SET_MODEL_RESPONSE_TOOL }
+                    if (setModelResponseCall != null) {
+                        require(response.calls.size == 1) {
+                            "set_model_response must be the only tool call in a turn."
+                        }
+                        val outputSchema =
+                            activeAgent.outputSchema
+                                ?: error("set_model_response is only valid when outputSchema is configured.")
+                        val structuredResponse = outputSchema.validate(setModelResponseCall.arguments)
+                        val finalMessage = structuredResponse.toString()
+                        val output = ToolOutput(finalMessage)
+
+                        toolExecutions +=
+                            ToolExecution(
+                                agentName = activeAgent.name,
+                                call = setModelResponseCall,
+                                output = output,
+                            )
+                        transcript = transcript + ModelMessage(finalMessage)
+
+                        val savedSession =
+                            workingSession.copy(
+                                state = workingState.toMap(),
+                                transcript = transcript,
+                                updatedAt = Instant.now(),
+                            )
+                        sessionStore.save(app.name, savedSession)
+                        return RunResult(
+                            session = savedSession,
+                            finalMessage = finalMessage,
+                            finalAgentName = activeAgent.name,
+                            structuredResponse = structuredResponse,
+                            toolExecutions = toolExecutions.toList(),
+                        )
+                    }
+
                     response.calls.forEach { call ->
                         val tool =
                             activeAgent.tools.find { it.definition.name == call.toolName }
@@ -137,5 +177,14 @@ class Runner(
         }
 
         error("Agent ${rootAgent.name} exceeded maxIterations=${rootAgent.maxIterations}.")
+    }
+
+    private fun shouldUseOutputSchemaWorkaround(agent: LlmAgent): Boolean {
+        if (agent.outputSchema == null || agent.tools.isEmpty()) {
+            return false
+        }
+
+        val capabilities = (model as? SupportsModelCapabilities)?.modelCapabilities
+        return capabilities?.supportsOutputSchemaWithTools != true
     }
 }

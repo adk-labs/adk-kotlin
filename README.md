@@ -12,6 +12,8 @@ but the API shape here follows Kotlin conventions first:
 - Lambda-friendly tools and small composable interfaces.
 - Official ADK-aligned instruction assembly for identity, global instruction,
   session-state injection, and transfer instructions.
+- Output schema workaround alignment via the internal `set_model_response`
+  tool when agents use tools and structured final output together.
 
 ## Current Scope
 
@@ -62,11 +64,12 @@ The Kotlin runtime now follows the official ADK layering:
 1. Global instruction.
 2. Agent instruction or static instruction semantics.
 3. Framework identity instruction.
-4. Transfer instructions when agent handoff is available.
+4. Output schema workaround instruction when `outputSchema` and tools coexist.
+5. Transfer instructions when agent handoff is available.
 
 ## Near-Term Roadmap
 
 - Introduce provider modules instead of baking model transports into core.
 - Add richer tool schemas, streaming, and persistent session backends.
-- Align more of the official runtime surface, including output schema and
-  artifact-aware instructions.
+- Align more of the official runtime surface, including artifact-aware
+  instructions and provider-native structured output capabilities.
