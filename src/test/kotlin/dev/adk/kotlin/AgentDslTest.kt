@@ -47,4 +47,41 @@ class AgentDslTest {
         assertEquals(listOf("greeter"), agent.subAgents.map { it.name })
         assertTrue(app.transferTargetsOf(agent).map { it.name }.contains("greeter"))
     }
+
+    @Test
+    fun `supports official naming aliases and plural DSL methods`() {
+        val lookupWeather =
+            tool(
+                name = "lookup_weather",
+                description = "Resolve current weather for a city.",
+            ) {
+                state["last_city"] = "Seoul"
+                ToolOutput("sunny")
+            }
+
+        val greeter: Agent =
+            agent("greeter") {
+                model = "gemini-2.5-flash"
+                instruction("Open with a concise greeting.")
+            }
+
+        val coordinator: Agent =
+            agent("coordinator") {
+                model = "gemini-2.5-pro"
+                description = "Coordinates trip planning."
+                tools(lookupWeather)
+                subAgents(greeter)
+            }
+
+        val officialApp: App =
+            app("travel_assistant") {
+                globalInstruction("Always respond for {user:name}.")
+                rootAgent(coordinator)
+            }
+
+        assertEquals("travel_assistant", officialApp.name)
+        assertEquals("coordinator", officialApp.rootAgent.name)
+        assertEquals(listOf("lookup_weather"), officialApp.rootAgent.tools.map { it.definition.name })
+        assertEquals(listOf("greeter"), officialApp.rootAgent.subAgents.map { it.name })
+    }
 }

@@ -3,11 +3,20 @@ package dev.adk.kotlin
 @DslMarker
 annotation class AdkDsl
 
-fun adkApp(name: String, block: AppDsl.() -> Unit): AdkApp =
+typealias App = AdkApp
+typealias Agent = LlmAgent
+
+fun app(name: String, block: AppDsl.() -> Unit): App =
     AppDsl(name).apply(block).build()
 
-fun llmAgent(name: String, block: LlmAgentDsl.() -> Unit): LlmAgent =
+fun adkApp(name: String, block: AppDsl.() -> Unit): AdkApp =
+    app(name, block)
+
+fun agent(name: String, block: LlmAgentDsl.() -> Unit): Agent =
     LlmAgentDsl(name).apply(block).build()
+
+fun llmAgent(name: String, block: LlmAgentDsl.() -> Unit): LlmAgent =
+    agent(name, block)
 
 @AdkDsl
 class AppDsl internal constructor(
@@ -26,6 +35,11 @@ class AppDsl internal constructor(
     fun rootAgent(name: String, block: LlmAgentDsl.() -> Unit) {
         check(rootAgent == null) { "Only one root agent can be defined." }
         rootAgent = llmAgent(name, block)
+    }
+
+    fun rootAgent(agent: LlmAgent) {
+        check(rootAgent == null) { "Only one root agent can be defined." }
+        rootAgent = agent
     }
 
     internal fun build(): AdkApp =
@@ -80,8 +94,16 @@ class LlmAgentDsl internal constructor(
         tools += tool
     }
 
+    fun tools(vararg tools: Tool) {
+        this.tools += tools
+    }
+
     fun subAgent(name: String, block: LlmAgentDsl.() -> Unit) {
         subAgents += llmAgent(name, block)
+    }
+
+    fun subAgents(vararg agents: LlmAgent) {
+        subAgents += agents
     }
 
     internal fun build(): LlmAgent =

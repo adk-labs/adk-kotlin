@@ -25,6 +25,8 @@ interface Tool {
     suspend fun execute(call: ToolCall, context: ToolContext): ToolOutput
 }
 
+typealias Context = ToolContext
+
 class ToolContext internal constructor(
     val appName: String,
     val agent: LlmAgent,
@@ -32,6 +34,9 @@ class ToolContext internal constructor(
     private val workingState: MutableMap<String, String>,
     private val artifactService: ArtifactService,
 ) {
+    val state: MutableMap<String, String>
+        get() = workingState
+
     fun remember(key: String, value: String?) {
         if (value == null) {
             workingState.remove(key)

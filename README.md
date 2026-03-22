@@ -3,6 +3,12 @@
 `adk-kotlin` is being built as a Kotlin-first SDK, not as a 1:1 port of the
 official Java ADK.
 
+Kotlin-first does not mean naming drift. Public API names should stay aligned
+with the official ADK surface where possible, so this library now supports both
+the original Kotlin-first helpers and official-style names such as `App`,
+`Agent`, `Context`, `app(...)`, `agent(...)`, `tools(...)`, and
+`subAgents(...)`.
+
 The reference implementations in `../ref` are useful for capability mapping,
 but the API shape here follows Kotlin conventions first:
 
@@ -37,29 +43,32 @@ integrations and broader ADK feature parity.
 ## Example
 
 ```kotlin
-val app = adkApp("travel-assistant") {
+val greeter: Agent = agent("greeter") {
+    model = "gemini-2.5-flash"
+    instruction("Handle greeting-heavy requests.")
+}
+
+val app: App = app("travel_assistant") {
     globalInstruction("Prefer factual answers for {user:name}.")
 
-    rootAgent("planner") {
-        model = "gemini-2.5-pro"
-        description = "Coordinates trip planning."
-        instruction("Use tools before answering.")
-        tool(
-            tool(
-                name = "lookup_weather",
-                description = "Resolve current weather for a city.",
-            ) { call ->
-                val city = call.requireArgument("city")
-                remember("last_city", city)
-                ToolOutput("$city is sunny")
-            }
-        )
-        subAgent("researcher") {
-            model = "gemini-2.5-flash"
-            description = "Researches destinations and local details."
-            instruction("Handle research-heavy questions.")
+    rootAgent(
+        agent("planner") {
+            model = "gemini-2.5-pro"
+            description = "Coordinates trip planning."
+            instruction("Use tools before answering.")
+            tools(
+                tool(
+                    name = "lookup_weather",
+                    description = "Resolve current weather for a city.",
+                ) { call ->
+                    val city = call.requireArgument("city")
+                    state["last_city"] = city
+                    ToolOutput("$city is sunny")
+                }
+            )
+            subAgents(greeter)
         }
-    }
+    )
 }
 ```
 
