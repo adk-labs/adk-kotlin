@@ -191,9 +191,13 @@ class AgentDslTest {
                 rootAgent("planner") {
                     model = "gemini-2.5-pro"
                     this.planner = planner
+                    includeContents = IncludeContents.NONE
+                    outputKey = "planner_output"
                 }
             }
 
         assertEquals(planner, app.rootAgent.planner)
+        assertEquals(IncludeContents.NONE, app.rootAgent.includeContents)
+        assertEquals("planner_output", app.rootAgent.outputKey)
     }
 }

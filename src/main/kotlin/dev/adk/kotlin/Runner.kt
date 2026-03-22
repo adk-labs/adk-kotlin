@@ -398,6 +398,7 @@ class Runner(
                         finalModelResponse.message.ifBlank {
                             structuredResponse?.toString().orEmpty()
                         }
+                    persistOutput(agent, finalMessage, workingState)
                     val emittedEvent =
                         emitEvent(
                             invocationContext = invocationContext,
@@ -529,6 +530,7 @@ class Runner(
                                 ?: error("set_model_response is only valid when outputSchema is configured.")
                         val structuredResponse = outputSchema.validate(setModelResponseCall.arguments)
                         val finalMessage = structuredResponse.toString()
+                        persistOutput(agent, finalMessage, workingState)
                         val output = ToolOutput(finalMessage)
 
                         toolExecutions +=
@@ -717,6 +719,16 @@ class Runner(
                 stringKey to value
             },
         )
+    }
+
+    private fun persistOutput(
+        agent: LlmAgent,
+        finalMessage: String,
+        workingState: MutableMap<String, String>,
+    ) {
+        agent.outputKey?.takeIf { it.isNotBlank() }?.let { outputKey ->
+            workingState[outputKey] = finalMessage
+        }
     }
 
     private fun computeStateDelta(

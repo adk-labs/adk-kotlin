@@ -66,6 +66,8 @@ class LlmAgentDsl internal constructor(
     var model: String? = null
     var description: String = ""
     var generateContentConfig: GenerateContentConfig? = null
+    var includeContents: IncludeContents = IncludeContents.DEFAULT
+    var outputKey: String? = null
     var planner: BasePlanner? = null
     var maxIterations: Int = 8
     var disallowTransferToParent: Boolean = false
@@ -150,7 +152,9 @@ class LlmAgentDsl internal constructor(
                     },
             staticInstruction = staticInstructionText,
             generateContentConfig = generateContentConfig,
+            includeContents = includeContents,
             outputSchema = outputSchema,
+            outputKey = outputKey?.trim()?.takeIf { it.isNotEmpty() },
             planner = planner,
             tools = tools.toList(),
             subAgents = subAgents.toList(),

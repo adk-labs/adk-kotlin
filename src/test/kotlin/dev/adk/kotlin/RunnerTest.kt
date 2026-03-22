@@ -1059,4 +1059,34 @@ class RunnerTest {
 
             assertEquals("Final concise answer.", result.finalMessage)
         }
+
+    @Test
+    fun `runner persists final output into output key`() =
+        runTest {
+            val app =
+                adkApp("planner-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        outputKey = "planner_output"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel {
+                    ModelResponse.Final("Persist me.")
+                }
+
+            val runner = Runner(app = app, model = fakeModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Answer and persist.",
+                )
+
+            assertEquals("Persist me.", result.finalMessage)
+            assertEquals("Persist me.", result.session.state["planner_output"])
+            assertEquals("Persist me.", result.events.last().actions.agentState?.get("planner_output"))
+        }
 }

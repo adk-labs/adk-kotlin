@@ -108,6 +108,35 @@ class PromptAssemblerTest {
         }
 
     @Test
+    fun `drops prior transcript when include contents is none`() =
+        runTest {
+            val app =
+                adkApp("planner-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        includeContents = IncludeContents.NONE
+                    }
+                }
+
+            val request =
+                PromptAssembler.createRequest(
+                    app = app,
+                    agent = app.rootAgent,
+                    session = AgentSession(id = "session-1", userId = "user-1"),
+                    transcript =
+                        listOf(
+                            UserMessage("Old question."),
+                            ModelMessage("Old answer."),
+                            UserMessage("Current question."),
+                        ),
+                )
+
+            assertEquals(1, request.conversation.size)
+            assertEquals("Current question.", request.conversation.single().text)
+            assertTrue(request.conversation.single() is UserMessage)
+        }
+
+    @Test
     fun `adds set_model_response workaround when output schema and tools are combined`() =
         runTest {
             val weatherTool =

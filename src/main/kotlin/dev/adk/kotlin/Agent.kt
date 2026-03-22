@@ -9,6 +9,11 @@ enum class AgentExecutionKind {
     PARALLEL,
 }
 
+enum class IncludeContents {
+    DEFAULT,
+    NONE,
+}
+
 data class AdkApp(
     val name: String,
     val rootAgent: LlmAgent,
@@ -126,7 +131,9 @@ data class LlmAgent(
     val instruction: InstructionTemplate? = null,
     val staticInstruction: String? = null,
     val generateContentConfig: GenerateContentConfig? = null,
+    val includeContents: IncludeContents = IncludeContents.DEFAULT,
     val outputSchema: OutputSchema? = null,
+    val outputKey: String? = null,
     val planner: BasePlanner? = null,
     val tools: List<Tool> = emptyList(),
     val subAgents: List<LlmAgent> = emptyList(),
@@ -160,7 +167,11 @@ data class LlmAgent(
                 require(instruction == null) { "SequentialAgent '$name' cannot declare instruction." }
                 require(staticInstruction == null) { "SequentialAgent '$name' cannot declare staticInstruction." }
                 require(generateContentConfig == null) { "SequentialAgent '$name' cannot declare generateContentConfig." }
+                require(includeContents == IncludeContents.DEFAULT) {
+                    "SequentialAgent '$name' cannot declare includeContents."
+                }
                 require(outputSchema == null) { "SequentialAgent '$name' cannot declare outputSchema." }
+                require(outputKey == null) { "SequentialAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "SequentialAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "SequentialAgent '$name' cannot declare tools." }
             }
@@ -174,7 +185,11 @@ data class LlmAgent(
                 require(instruction == null) { "LoopAgent '$name' cannot declare instruction." }
                 require(staticInstruction == null) { "LoopAgent '$name' cannot declare staticInstruction." }
                 require(generateContentConfig == null) { "LoopAgent '$name' cannot declare generateContentConfig." }
+                require(includeContents == IncludeContents.DEFAULT) {
+                    "LoopAgent '$name' cannot declare includeContents."
+                }
                 require(outputSchema == null) { "LoopAgent '$name' cannot declare outputSchema." }
+                require(outputKey == null) { "LoopAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "LoopAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "LoopAgent '$name' cannot declare tools." }
             }
@@ -188,7 +203,11 @@ data class LlmAgent(
                 require(generateContentConfig == null) {
                     "ParallelAgent '$name' cannot declare generateContentConfig."
                 }
+                require(includeContents == IncludeContents.DEFAULT) {
+                    "ParallelAgent '$name' cannot declare includeContents."
+                }
                 require(outputSchema == null) { "ParallelAgent '$name' cannot declare outputSchema." }
+                require(outputKey == null) { "ParallelAgent '$name' cannot declare outputKey." }
                 require(planner == null) { "ParallelAgent '$name' cannot declare planner." }
                 require(tools.isEmpty()) { "ParallelAgent '$name' cannot declare tools." }
             }

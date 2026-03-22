@@ -24,6 +24,7 @@ internal object PromptAssembler {
         val systemInstructions = mutableListOf<String>()
         val nativeOutputSchema = nativeOutputSchema(agent, includeOutputSchemaWorkaround)
         val requestConfig = buildGenerateContentConfig(agent, nativeOutputSchema)
+        val conversation = conversationFor(agent, transcript)
 
         app.globalInstruction
             ?.let {
@@ -81,9 +82,9 @@ internal object PromptAssembler {
             systemInstructions = systemInstructions.toList(),
             conversation =
                 if (dynamicInstruction != null && agent.staticInstruction != null) {
-                    insertInstructionBeforeLastUserBatch(transcript, dynamicInstruction)
+                    insertInstructionBeforeLastUserBatch(conversation, dynamicInstruction)
                 } else {
-                    transcript
+                    conversation
                 },
             availableTools =
                 buildAvailableTools(
@@ -372,6 +373,36 @@ internal object PromptAssembler {
         val mutableConversation = transcript.toMutableList()
         mutableConversation.add(insertIndex, UserMessage(instruction))
         return mutableConversation.toList()
+    }
+
+    private fun conversationFor(
+        agent: LlmAgent,
+        transcript: List<Message>,
+    ): List<Message> =
+        when (agent.includeContents) {
+            IncludeContents.DEFAULT -> transcript
+            IncludeContents.NONE -> latestUserBatch(transcript)
+        }
+
+    private fun latestUserBatch(transcript: List<Message>): List<Message> {
+        if (transcript.isEmpty()) {
+            return emptyList()
+        }
+
+        var startIndex = transcript.size
+        for (index in transcript.indices.reversed()) {
+            val message = transcript[index]
+            if (message.role != MessageRole.USER) {
+                break
+            }
+            startIndex = index
+        }
+
+        return if (startIndex == transcript.size) {
+            emptyList()
+        } else {
+            transcript.subList(startIndex, transcript.size)
+        }
     }
 
     private fun OutputSchema.toToolSchema(): ToolSchema =

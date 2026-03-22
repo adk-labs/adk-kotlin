@@ -37,6 +37,7 @@ but the API shape here follows Kotlin conventions first:
   orchestration.
 - Planner foundations with `BuiltInPlanner` thinking-config override and
   `PlanReActPlanner` instruction injection.
+- Controlled I/O semantics with `includeContents` and `outputKey`.
 
 ## Current Scope
 
@@ -56,6 +57,7 @@ The repository currently contains the first runnable foundation:
 - Sequential, loop, and parallel shell-agent orchestration on top of the same
   runner/event model.
 - Planner support for model-native thinking and NL plan/react prompting.
+- Controlled transcript inclusion and session-state output persistence.
 - Tests that validate the DSL, prompt assembly, and transfer flow.
 
 This is intentionally narrower than the official ADK libraries. The first goal
@@ -136,6 +138,13 @@ val planReact: Agent =
     agent("plan_react") {
         model = "gemini-2.5-pro"
         planner = planReActPlanner()
+    }
+
+val focusedExtractor: Agent =
+    agent("focused_extractor") {
+        model = "gemini-2.5-pro"
+        includeContents = IncludeContents.NONE
+        outputKey = "extracted_summary"
     }
 ```
 
@@ -245,6 +254,13 @@ Planner support now follows the same split as the official ADK:
 - `BuiltInPlanner` overrides `thinkingConfig` on the outgoing model request.
 - `PlanReActPlanner` appends planning instructions and extracts the
   `/*FINAL_ANSWER*/` section from final responses.
+
+Controlled I/O semantics now align with the official agent surface as well:
+
+- `includeContents = IncludeContents.NONE` sends only the current user turn to
+  the model instead of the full transcript.
+- `outputKey = "..."` writes the final agent output back into session state for
+  downstream agents and tools.
 
 Structured output now follows the official split path as well:
 
