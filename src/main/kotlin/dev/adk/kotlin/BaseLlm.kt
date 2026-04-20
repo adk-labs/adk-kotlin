@@ -1,5 +1,16 @@
 package dev.adk.kotlin
 
+fun interface LlmTransport {
+    suspend fun generate(
+        request: ModelRequest,
+        stream: Boolean,
+    ): ModelResponse
+}
+
+fun interface LlmConnectionFactory {
+    fun connect(request: ModelRequest): BaseLlmConnection
+}
+
 abstract class BaseLlm(
     val model: String,
 ) : LanguageModel, SupportsModelCapabilities {
@@ -18,3 +29,22 @@ abstract class BaseLlm(
 }
 
 interface BaseLlmConnection
+
+abstract class TransportBackedLlm(
+    model: String,
+    private val providerName: String,
+    final override val modelCapabilities: ModelCapabilities = ModelCapabilities(),
+    private val transport: LlmTransport? = null,
+    private val connectionFactory: LlmConnectionFactory? = null,
+) : BaseLlm(model) {
+    final override suspend fun generateContent(
+        request: ModelRequest,
+        stream: Boolean,
+    ): ModelResponse =
+        requireNotNull(transport) {
+            "$providerName transport is not configured for model '$model'."
+        }.generate(request, stream)
+
+    override fun connect(request: ModelRequest): BaseLlmConnection =
+        connectionFactory?.connect(request) ?: super.connect(request)
+}

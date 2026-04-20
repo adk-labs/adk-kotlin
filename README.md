@@ -288,16 +288,29 @@ val prefixedToolset =
     }
 ```
 
-Provider modules can now plug in through `BaseLlm` and `LlmRegistry`:
+Official-style provider classes are now available through `Gemini`, `Claude`,
+`ApigeeLlm`, `VertexCredentials`, and `LlmRegistry`. The default registry now
+maps `gemini-.*`, `claude-.*`, and `apigee/.*` model names:
 
 ```kotlin
-LlmRegistry.registerLlm("gemini-.*") { modelName ->
-    object : BaseLlm(modelName) {
-        override suspend fun generateContent(
-            request: ModelRequest,
-            stream: Boolean,
-        ): ModelResponse = ModelResponse.Final("Implement provider call here.")
-    }
+val gemini =
+    Gemini.builder()
+        .modelName("gemini-2.5-pro")
+        .vertexCredentials(
+            VertexCredentials.builder()
+                .project("my-project")
+                .location("us-central1")
+                .build(),
+        ).transport { request, stream ->
+            ModelResponse.Final("Implement provider call here.")
+        }.build()
+
+LlmRegistry.registerLlm("gemini-custom-.*") { modelName ->
+    Gemini.builder()
+        .modelName(modelName)
+        .transport { request, stream ->
+            ModelResponse.Final("Custom Gemini provider.")
+        }.build()
 }
 
 val runner = Runner(

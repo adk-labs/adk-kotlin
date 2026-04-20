@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class RunnerTest {
     @AfterTest
     fun tearDown() {
-        LlmRegistry.clearForTests()
+        LlmRegistry.resetToDefaults()
     }
 
     @Test

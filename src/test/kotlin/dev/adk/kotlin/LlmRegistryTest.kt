@@ -9,12 +9,14 @@ import kotlin.test.assertTrue
 class LlmRegistryTest {
     @AfterTest
     fun tearDown() {
-        LlmRegistry.clearForTests()
+        LlmRegistry.resetToDefaults()
     }
 
     @Test
     fun `registry backed language model resolves registered llms`() =
         runTest {
+            LlmRegistry.clearForTests()
+
             class FakeRegisteredLlm(
                 modelName: String,
             ) : BaseLlm(modelName) {
@@ -57,4 +59,17 @@ class LlmRegistryTest {
                     .supportsOutputSchemaWithTools,
             )
         }
+
+    @Test
+    fun `registry ships official provider defaults`() {
+        LlmRegistry.resetToDefaults()
+
+        assertTrue(LlmRegistry.getLlm("gemini-2.5-pro") is Gemini)
+        assertTrue(LlmRegistry.getLlm("claude-3-7-sonnet") is Claude)
+
+        val apigee = LlmRegistry.getLlm("apigee/vertex_ai/v1beta/gemini-2.5-flash")
+        assertTrue(apigee is ApigeeLlm)
+        assertEquals("v1beta", (apigee as ApigeeLlm).apiVersion)
+        assertTrue(apigee.usesVertexAi)
+    }
 }
