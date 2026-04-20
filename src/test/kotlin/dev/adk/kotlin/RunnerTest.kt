@@ -17,6 +17,44 @@ class RunnerTest {
     }
 
     @Test
+    fun `runner prefers an agent-bound BaseLlm over the fallback model`() =
+        runTest {
+            val boundLlm =
+                Gemini.builder()
+                    .modelName("gemini-bound")
+                    .transport { request, _ ->
+                        assertEquals("gemini-bound", request.model)
+                        ModelResponse.Final("Bound provider response.")
+                    }.build()
+
+            val app =
+                adkApp("bound-provider-app") {
+                    rootAgent("planner") {
+                        model(boundLlm)
+                        instruction("Answer directly.")
+                    }
+                }
+
+            val fallbackModel =
+                LanguageModel {
+                    error("Runner fallback model should not be used when the agent carries a BaseLlm.")
+                }
+
+            val runner = Runner(app = app, model = fallbackModel)
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Say hello.",
+                )
+
+            assertEquals("Bound provider response.", result.finalMessage)
+            assertEquals("gemini-bound", app.rootAgent.modelName)
+            assertEquals(boundLlm, app.rootAgent.baseLlm)
+        }
+
+    @Test
     fun `runner executes tools before returning the final answer`() =
         runTest {
             var modelCalls = 0

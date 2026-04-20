@@ -76,7 +76,7 @@ internal object PromptAssembler {
         }
 
         return ModelRequest(
-            model = agent.model,
+            model = agent.modelName,
             appName = app.name,
             session = session,
             agent = agent,

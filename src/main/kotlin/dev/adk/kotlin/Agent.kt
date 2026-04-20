@@ -126,7 +126,7 @@ typealias ParallelAgent = LlmAgent
 
 data class LlmAgent(
     val name: String,
-    val model: String = "",
+    val model: Model? = null,
     val description: String = "",
     val instruction: InstructionTemplate? = null,
     val staticInstruction: String? = null,
@@ -146,6 +146,12 @@ data class LlmAgent(
     val disallowTransferToPeers: Boolean = false,
     val executionKind: AgentExecutionKind = AgentExecutionKind.LLM,
 ) {
+    val modelName: String
+        get() = model?.resolvedModelName().orEmpty()
+
+    val baseLlm: BaseLlm?
+        get() = model?.model
+
     init {
         require(name.isNotBlank()) { "Agent name cannot be blank." }
         require(AGENT_NAME_PATTERN.matches(name)) {
@@ -159,12 +165,12 @@ data class LlmAgent(
 
         when (executionKind) {
             AgentExecutionKind.LLM -> {
-                require(model.isNotBlank()) { "Agent model cannot be blank." }
+                require(model != null) { "Agent model cannot be blank." }
                 require(loopMaxIterations == null) { "LlmAgent '$name' cannot declare loopMaxIterations." }
             }
 
             AgentExecutionKind.SEQUENTIAL -> {
-                require(model.isBlank()) { "SequentialAgent '$name' must not declare a model." }
+                require(model == null) { "SequentialAgent '$name' must not declare a model." }
                 require(subAgents.isNotEmpty()) { "SequentialAgent '$name' must declare at least one sub-agent." }
                 require(loopMaxIterations == null) { "SequentialAgent '$name' cannot declare loopMaxIterations." }
                 require(instruction == null) { "SequentialAgent '$name' cannot declare instruction." }
@@ -183,7 +189,7 @@ data class LlmAgent(
             }
 
             AgentExecutionKind.LOOP -> {
-                require(model.isBlank()) { "LoopAgent '$name' must not declare a model." }
+                require(model == null) { "LoopAgent '$name' must not declare a model." }
                 require(subAgents.isNotEmpty()) { "LoopAgent '$name' must declare at least one sub-agent." }
                 require(loopMaxIterations == null || loopMaxIterations > 0) {
                     "LoopAgent '$name' must declare a positive loopMaxIterations."
@@ -204,7 +210,7 @@ data class LlmAgent(
             }
 
             AgentExecutionKind.PARALLEL -> {
-                require(model.isBlank()) { "ParallelAgent '$name' must not declare a model." }
+                require(model == null) { "ParallelAgent '$name' must not declare a model." }
                 require(subAgents.isNotEmpty()) { "ParallelAgent '$name' must declare at least one sub-agent." }
                 require(loopMaxIterations == null) { "ParallelAgent '$name' cannot declare loopMaxIterations." }
                 require(instruction == null) { "ParallelAgent '$name' cannot declare instruction." }

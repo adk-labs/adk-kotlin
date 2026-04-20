@@ -64,6 +64,17 @@ class LlmAgentDsl internal constructor(
     private val name: String,
 ) {
     var model: String? = null
+        set(value) {
+            field = value
+            modelRef = value
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { modelName ->
+                    Model.builder()
+                        .modelName(modelName)
+                        .build()
+                }
+        }
     var description: String = ""
     var generateContentConfig: GenerateContentConfig? = null
     var includeContents: IncludeContents = IncludeContents.DEFAULT
@@ -82,6 +93,7 @@ class LlmAgentDsl internal constructor(
     private var staticInstructionText: String? = null
     private var inputSchema: ToolSchema? = null
     private var outputSchema: OutputSchema? = null
+    private var modelRef: Model? = null
 
     fun instruction(
         line: String,
@@ -112,6 +124,19 @@ class LlmAgentDsl internal constructor(
 
     fun planner(planner: BasePlanner) {
         this.planner = planner
+    }
+
+    fun model(model: BaseLlm) {
+        this.model = null
+        modelRef =
+            Model.builder()
+                .model(model)
+                .build()
+    }
+
+    fun model(model: Model) {
+        this.model = null
+        modelRef = model
     }
 
     fun tool(tool: Tool) {
@@ -153,7 +178,7 @@ class LlmAgentDsl internal constructor(
     internal fun build(): LlmAgent =
         LlmAgent(
             name = name,
-            model = requireNotNull(model) { "model must be provided for agent $name." }.trim(),
+            model = requireNotNull(modelRef) { "model must be provided for agent $name." },
             description = description.trim(),
             instruction =
                 instructionLines

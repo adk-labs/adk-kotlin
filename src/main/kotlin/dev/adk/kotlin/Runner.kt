@@ -471,7 +471,7 @@ class Runner(
             val response =
                 pluginManager.runBeforeModelCallback(callbackContext, pluginPreparedRequest)
                     ?: try {
-                        model.generate(pluginPreparedRequest)
+                        effectiveLanguageModel(agent).generate(pluginPreparedRequest)
                     } catch (error: Throwable) {
                         pluginManager.runOnModelErrorCallback(callbackContext, pluginPreparedRequest, error) ?: throw error
                     }
@@ -1083,14 +1083,19 @@ class Runner(
             return false
         }
 
-        val capabilities =
-            when (model) {
-                is SupportsPerModelCapabilities -> model.modelCapabilities(agent.model)
+        val capabilities = effectiveModelCapabilities(agent)
+        return capabilities?.supportsOutputSchemaWithTools != true
+    }
+
+    private fun effectiveLanguageModel(agent: LlmAgent): LanguageModel = agent.baseLlm ?: model
+
+    private fun effectiveModelCapabilities(agent: LlmAgent): ModelCapabilities? =
+        agent.baseLlm?.modelCapabilities
+            ?: when (model) {
+                is SupportsPerModelCapabilities -> model.modelCapabilities(agent.modelName)
                 is SupportsModelCapabilities -> model.modelCapabilities
                 else -> null
             }
-        return capabilities?.supportsOutputSchemaWithTools != true
-    }
 
     private fun validateStructuredResponse(
         agent: LlmAgent,

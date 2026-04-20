@@ -37,7 +37,7 @@ class AgentDslTest {
 
         assertEquals("travel-assistant", app.name)
         assertEquals("coordinator", agent.name)
-        assertEquals("gemini-2.5-pro", agent.model)
+        assertEquals("gemini-2.5-pro", agent.modelName)
         assertEquals("Always respond for {user:name}.", app.globalInstruction?.text)
         assertEquals(
             "Ask for clarification only when the request is ambiguous.\nPrefer tool results over guessing.",
@@ -133,7 +133,8 @@ class AgentDslTest {
             }
 
         assertEquals(AgentExecutionKind.SEQUENTIAL, app.rootAgent.executionKind)
-        assertEquals("", app.rootAgent.model)
+        assertEquals("", app.rootAgent.modelName)
+        assertEquals(null, app.rootAgent.model)
         assertEquals(listOf("researcher", "reviewer"), app.rootAgent.subAgents.map { it.name })
     }
 
@@ -178,8 +179,28 @@ class AgentDslTest {
             }
 
         assertEquals(AgentExecutionKind.PARALLEL, fanOut.executionKind)
-        assertEquals("", fanOut.model)
+        assertEquals("", fanOut.modelName)
+        assertEquals(null, fanOut.model)
         assertEquals(listOf("fast", "slow"), fanOut.subAgents.map { it.name })
+    }
+
+    @Test
+    fun `supports direct BaseLlm instances in the Kotlin DSL`() {
+        val gemini =
+            Gemini.builder()
+                .modelName("gemini-2.5-pro")
+                .transport { _, _ -> ModelResponse.Final("ok") }
+                .build()
+
+        val built =
+            agent("planner") {
+                model(gemini)
+                instruction("Plan the request.")
+            }
+
+        assertEquals("gemini-2.5-pro", built.modelName)
+        assertEquals(gemini, built.baseLlm)
+        assertEquals(gemini.modelCapabilities, built.baseLlm?.modelCapabilities)
     }
 
     @Test

@@ -305,6 +305,14 @@ val gemini =
             ModelResponse.Final("Implement provider call here.")
         }.build()
 
+val app =
+    adkApp("travel-assistant") {
+        rootAgent("planner") {
+            model(gemini)
+            instruction("Plan the trip.")
+        }
+    }
+
 LlmRegistry.registerLlm("gemini-custom-.*") { modelName ->
     Gemini.builder()
         .modelName(modelName)
