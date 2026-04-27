@@ -289,8 +289,8 @@ val prefixedToolset =
 ```
 
 Official-style provider classes are now available through `Gemini`, `Claude`,
-`ApigeeLlm`, `VertexCredentials`, and `LlmRegistry`. The default registry now
-maps `gemini-.*`, `claude-.*`, and `apigee/.*` model names:
+`ApigeeLlm`, `VertexCredentials`, and `LlmRegistry`. Providers can be bound
+directly to an agent, or registered explicitly when a transport is available:
 
 ```kotlin
 val gemini =
@@ -313,12 +313,10 @@ val app =
         }
     }
 
-LlmRegistry.registerLlm("gemini-custom-.*") { modelName ->
-    Gemini.builder()
-        .modelName(modelName)
-        .transport { request, stream ->
-            ModelResponse.Final("Custom Gemini provider.")
-        }.build()
+LlmRegistry.registerGemini { modelName ->
+    LlmTransport { request, stream ->
+        ModelResponse.Final("Registered Gemini transport for $modelName.")
+    }
 }
 
 val runner = Runner(

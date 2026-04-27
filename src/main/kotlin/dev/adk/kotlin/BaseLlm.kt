@@ -7,6 +7,10 @@ fun interface LlmTransport {
     ): ModelResponse
 }
 
+fun interface LlmTransportFactory {
+    fun create(modelName: String): LlmTransport
+}
+
 fun interface LlmConnectionFactory {
     fun connect(request: ModelRequest): BaseLlmConnection
 }

@@ -13,22 +13,6 @@ interface ModelResolver {
 object LlmRegistry : ModelResolver {
     private val instances = ConcurrentHashMap<String, BaseLlm>()
     private val registrations = mutableListOf<RegisteredLlm>()
-    private val defaultRegistrations =
-        listOf(
-            DefaultRegistration("gemini-.*") { modelName ->
-                Gemini.builder().modelName(modelName).build()
-            },
-            DefaultRegistration("claude-.*") { modelName ->
-                Claude.builder().modelName(modelName).build()
-            },
-            DefaultRegistration("apigee/.*") { modelName ->
-                ApigeeLlm.builder().modelName(modelName).build()
-            },
-        )
-
-    init {
-        resetToDefaults()
-    }
 
     @Synchronized
     fun registerLlm(
@@ -46,13 +30,84 @@ object LlmRegistry : ModelResolver {
     fun resetToDefaults() {
         registrations.clear()
         instances.clear()
-        defaultRegistrations.forEach { registration ->
-            registerInternal(
-                modelNamePattern = registration.pattern,
-                factory = registration.factory,
-                clearMatchingInstances = false,
-            )
+    }
+
+    fun registerGemini(
+        modelNamePattern: String = "gemini-.*",
+        modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+        transportFactory: LlmTransportFactory,
+    ) {
+        registerLlm(modelNamePattern) { modelName ->
+            Gemini.builder()
+                .modelName(modelName)
+                .modelCapabilities(modelCapabilities)
+                .transport(transportFactory.create(modelName))
+                .build()
         }
+    }
+
+    fun registerGemini(
+        modelNamePattern: String = "gemini-.*",
+        modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+        transport: LlmTransport,
+    ) {
+        registerGemini(
+            modelNamePattern = modelNamePattern,
+            modelCapabilities = modelCapabilities,
+            transportFactory = LlmTransportFactory { transport },
+        )
+    }
+
+    fun registerClaude(
+        modelNamePattern: String = "claude-.*",
+        modelCapabilities: ModelCapabilities = Claude.DEFAULT_MODEL_CAPABILITIES,
+        transportFactory: LlmTransportFactory,
+    ) {
+        registerLlm(modelNamePattern) { modelName ->
+            Claude.builder()
+                .modelName(modelName)
+                .modelCapabilities(modelCapabilities)
+                .transport(transportFactory.create(modelName))
+                .build()
+        }
+    }
+
+    fun registerClaude(
+        modelNamePattern: String = "claude-.*",
+        modelCapabilities: ModelCapabilities = Claude.DEFAULT_MODEL_CAPABILITIES,
+        transport: LlmTransport,
+    ) {
+        registerClaude(
+            modelNamePattern = modelNamePattern,
+            modelCapabilities = modelCapabilities,
+            transportFactory = LlmTransportFactory { transport },
+        )
+    }
+
+    fun registerApigee(
+        modelNamePattern: String = "apigee/.*",
+        modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+        transportFactory: LlmTransportFactory,
+    ) {
+        registerLlm(modelNamePattern) { modelName ->
+            ApigeeLlm.builder()
+                .modelName(modelName)
+                .modelCapabilities(modelCapabilities)
+                .transport(transportFactory.create(modelName))
+                .build()
+        }
+    }
+
+    fun registerApigee(
+        modelNamePattern: String = "apigee/.*",
+        modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+        transport: LlmTransport,
+    ) {
+        registerApigee(
+            modelNamePattern = modelNamePattern,
+            modelCapabilities = modelCapabilities,
+            transportFactory = LlmTransportFactory { transport },
+        )
     }
 
     @Synchronized
@@ -88,11 +143,6 @@ object LlmRegistry : ModelResolver {
     private data class RegisteredLlm(
         val pattern: String,
         val regex: Regex,
-        val factory: LlmFactory,
-    )
-
-    private data class DefaultRegistration(
-        val pattern: String,
         val factory: LlmFactory,
     )
 }
