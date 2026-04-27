@@ -15,7 +15,6 @@ class GlobalInstructionPlugin : BasePlugin {
     ) : super(name) {
         instructionTemplate =
             globalInstruction
-                .trim()
                 .takeIf(String::isNotEmpty)
                 ?.let { instruction ->
                     InstructionTemplate(
@@ -38,7 +37,7 @@ class GlobalInstructionPlugin : BasePlugin {
         callbackContext: CallbackContext,
         llmRequest: LlmRequest,
     ): LlmRequest {
-        val resolvedInstruction = resolveGlobalInstruction(callbackContext)?.trim().orEmpty()
+        val resolvedInstruction = resolveGlobalInstruction(callbackContext).orEmpty()
         if (resolvedInstruction.isEmpty()) {
             return llmRequest
         }

@@ -48,13 +48,14 @@ class PromptAssemblerTest {
                 "\nYou have a list of other agents to transfer to:\n\n" +
                     "\nAgent name: researcher\n" +
                     "Agent description: Researches complex travel questions.\n\n" +
-                    "\nIf you are the best to answer the question according to your description, you\n" +
-                    "can answer it.\n\n" +
+                    "\nIf you are the best to answer the question according to your description,\n" +
+                    "you can answer it.\n\n" +
                     "If another agent is better for answering the question according to its\n" +
-                    "description, call `transfer_to_agent` function to transfer the\n" +
-                    "question to that agent. When transferring, do not generate any text other than\n" +
-                    "the function call.\n\n" +
-                    "**NOTE**: the only available agents for `transfer_to_agent` function are `researcher`.\n",
+                    "description, call `transfer_to_agent` function to transfer the question to that\n" +
+                    "agent. When transferring, do not generate any text other than the function\n" +
+                    "call.\n\n" +
+                    "**NOTE**: the only available agents for `transfer_to_agent` function are\n" +
+                    "`researcher`.\n",
                 request.systemInstructions[3],
             )
 
@@ -105,6 +106,42 @@ class PromptAssemblerTest {
             assertEquals(3, request.conversation.size)
             assertEquals("Dynamic greeting for Alice.", request.conversation[1].text)
             assertTrue(request.conversation[1] is UserMessage)
+        }
+
+    @Test
+    fun `preserves official prompt whitespace from DSL text fields`() =
+        runTest {
+            val app =
+                adkApp("planner-app") {
+                    globalInstruction("  Global policy for {user:name}.  \n")
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                        description = "  Plans trips.  "
+                        staticInstruction("  Static safety policy.  ")
+                        instruction("  Dynamic greeting for {user:name}.  ")
+                    }
+                }
+
+            val request =
+                PromptAssembler.createRequest(
+                    app = app,
+                    agent = app.rootAgent,
+                    session =
+                        AgentSession(
+                            id = "session-1",
+                            userId = "user-1",
+                            state = mapOf("user:name" to "Alice"),
+                        ),
+                    transcript = listOf(UserMessage("Tell me about flights.")),
+                )
+
+            assertEquals("  Global policy for Alice.  \n", request.systemInstructions[0])
+            assertEquals("  Static safety policy.  ", request.systemInstructions[1])
+            assertEquals(
+                "You are an agent. Your internal name is \"planner\". The description about you is \"  Plans trips.  \".",
+                request.systemInstructions[2],
+            )
+            assertEquals("  Dynamic greeting for Alice.  ", request.conversation.first().text)
         }
 
     @Test

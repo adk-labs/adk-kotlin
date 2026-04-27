@@ -2150,6 +2150,42 @@ class RunnerTest {
         }
 
     @Test
+    fun `global instruction plugin preserves official whitespace`() =
+        runTest {
+            val app =
+                adkApp("plugin-whitespace-app") {
+                    rootAgent("planner") {
+                        model = "gemini-2.5-pro"
+                    }
+                }
+
+            val fakeModel =
+                LanguageModel { request ->
+                    assertEquals("  Keep exact spacing.  \n", request.systemInstructions.first())
+                    ModelResponse.Final("Preserved whitespace.")
+                }
+
+            val runner =
+                Runner(
+                    app = app,
+                    model = fakeModel,
+                    plugins =
+                        listOf(
+                            globalInstructionPlugin("  Keep exact spacing.  \n"),
+                        ),
+                )
+
+            val result =
+                runner.run(
+                    userId = "user-1",
+                    sessionId = "session-1",
+                    input = "Use exact spacing.",
+                )
+
+            assertEquals("Preserved whitespace.", result.finalMessage)
+        }
+
+    @Test
     fun `context filter plugin keeps only the most recent invocation`() =
         runTest {
             var modelCalls = 0

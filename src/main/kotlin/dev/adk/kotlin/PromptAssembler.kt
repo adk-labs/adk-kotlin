@@ -52,7 +52,6 @@ internal object PromptAssembler {
                 ?.takeIf { it.isNotEmpty() }
 
         agent.staticInstruction
-            ?.trim()
             ?.takeIf { it.isNotEmpty() }
             ?.let(systemInstructions::add)
 
@@ -176,13 +175,13 @@ internal object PromptAssembler {
         }
 
         instruction.append(
-            "\nIf you are the best to answer the question according to your description, you\n" +
-                "can answer it.\n\n" +
+            "\nIf you are the best to answer the question according to your description,\n" +
+                "you can answer it.\n\n" +
                 "If another agent is better for answering the question according to its\n" +
-                "description, call `transfer_to_agent` function to transfer the\n" +
-                "question to that agent. When transferring, do not generate any text other than\n" +
-                "the function call.\n\n" +
-                "**NOTE**: the only available agents for `transfer_to_agent` function are ",
+                "description, call `transfer_to_agent` function to transfer the question to that\n" +
+                "agent. When transferring, do not generate any text other than the function\n" +
+                "call.\n\n" +
+                "**NOTE**: the only available agents for `transfer_to_agent` function are\n",
         )
 
         agentNames.sort()

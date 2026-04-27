@@ -5,6 +5,6 @@ data class InstructionTemplate(
     val bypassStateInjection: Boolean = false,
 ) {
     init {
-        require(text.isNotBlank()) { "Instruction template cannot be blank." }
+        require(text.isNotEmpty()) { "Instruction template cannot be empty." }
     }
 }

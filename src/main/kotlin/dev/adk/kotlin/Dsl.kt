@@ -38,7 +38,7 @@ class AppDsl internal constructor(
         text: String,
         bypassStateInjection: Boolean = false,
     ) {
-        globalInstruction = InstructionTemplate(text = text.trim(), bypassStateInjection = bypassStateInjection)
+        globalInstruction = InstructionTemplate(text = text, bypassStateInjection = bypassStateInjection)
     }
 
     fun rootAgent(name: String, block: LlmAgentDsl.() -> Unit) {
@@ -96,9 +96,8 @@ class LlmAgentDsl internal constructor(
         bypassStateInjection: Boolean = false,
     ) {
         instructionBypassesStateInjection = bypassStateInjection
-        val normalized = line.trim()
-        if (normalized.isNotEmpty()) {
-            instructionLines += normalized
+        if (line.isNotEmpty()) {
+            instructionLines += line
         }
     }
 
@@ -107,7 +106,7 @@ class LlmAgentDsl internal constructor(
     }
 
     fun staticInstruction(text: String) {
-        staticInstructionText = text.trim()
+        staticInstructionText = text
     }
 
     fun outputSchema(block: OutputSchemaDsl.() -> Unit) {
@@ -172,7 +171,7 @@ class LlmAgentDsl internal constructor(
         LlmAgent(
             name = name,
             model = requireNotNull(modelRef) { "model must be provided for agent $name." },
-            description = description.trim(),
+            description = description,
             instruction =
                 instructionLines
                     .takeIf { it.isNotEmpty() }
