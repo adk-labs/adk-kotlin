@@ -5,6 +5,9 @@ import com.google.gson.GsonBuilder
 import dev.adk.kotlin.AttachmentScope
 import dev.adk.kotlin.Event
 import dev.adk.kotlin.EventActions
+import dev.adk.kotlin.EventCompaction
+import dev.adk.kotlin.EventTranscription
+import dev.adk.kotlin.EventUsageMetadata
 import dev.adk.kotlin.Message
 import dev.adk.kotlin.MessageAttachment
 import dev.adk.kotlin.ModelRequest
@@ -15,6 +18,7 @@ import dev.adk.kotlin.ToolDefinition
 import dev.adk.kotlin.ToolMessage
 import dev.adk.kotlin.ToolOutput
 import dev.adk.kotlin.AgentSession
+import dev.adk.kotlin.UiWidget
 
 const val RECORDINGS_CONFIG_KEY = "_adk_recordings_config"
 
@@ -104,20 +108,42 @@ data class EventRecording(
     val author: String,
     val content: MessageRecording? = null,
     val actions: EventActionsRecording,
+    val longRunningToolIds: Set<String>? = null,
     val branch: String? = null,
     val timestamp: String,
     val partial: Boolean,
     val turnComplete: Boolean,
+    val errorCode: String? = null,
+    val errorMessage: String? = null,
+    val finishReason: String? = null,
+    val usageMetadata: EventUsageMetadata? = null,
+    val avgLogprobs: Double? = null,
+    val interrupted: Boolean? = null,
+    val groundingMetadata: Map<String, Any?>? = null,
+    val customMetadata: Map<String, Any?>? = null,
+    val modelVersion: String? = null,
+    val inputTranscription: EventTranscription? = null,
+    val outputTranscription: EventTranscription? = null,
 )
 
 data class EventActionsRecording(
     val skipSummarization: Boolean? = null,
-    val stateDelta: Map<String, String?> = emptyMap(),
+    val stateDelta: Map<String, Any?> = emptyMap(),
     val artifactDelta: Map<String, Int> = emptyMap(),
+    val deletedArtifactIds: Set<String> = emptySet(),
     val transferToAgent: String? = null,
     val escalate: Boolean? = null,
+    val compaction: EventCompactionRecording? = null,
     val endOfAgent: Boolean? = null,
-    val agentState: Map<String, String>? = null,
+    val agentState: Map<String, Any?>? = null,
+    val rewindBeforeInvocationId: String? = null,
+    val renderUiWidgets: List<UiWidget>? = null,
+)
+
+data class EventCompactionRecording(
+    val startTimestamp: String,
+    val endTimestamp: String,
+    val compactedContent: MessageRecording,
 )
 
 data class MessageRecording(
@@ -202,10 +228,22 @@ internal fun Event.toRecording(): EventRecording =
         author = author,
         content = content?.toRecording(),
         actions = actions.toRecording(),
+        longRunningToolIds = longRunningToolIds,
         branch = branch,
         timestamp = timestamp.toString(),
         partial = partial,
         turnComplete = turnComplete,
+        errorCode = errorCode,
+        errorMessage = errorMessage,
+        finishReason = finishReason,
+        usageMetadata = usageMetadata,
+        avgLogprobs = avgLogprobs,
+        interrupted = interrupted,
+        groundingMetadata = groundingMetadata,
+        customMetadata = customMetadata,
+        modelVersion = modelVersion,
+        inputTranscription = inputTranscription,
+        outputTranscription = outputTranscription,
     )
 
 internal fun EventActions.toRecording(): EventActionsRecording =
@@ -213,10 +251,21 @@ internal fun EventActions.toRecording(): EventActionsRecording =
         skipSummarization = skipSummarization,
         stateDelta = stateDelta,
         artifactDelta = artifactDelta,
+        deletedArtifactIds = deletedArtifactIds,
         transferToAgent = transferToAgent,
         escalate = escalate,
+        compaction = compaction?.toRecording(),
         endOfAgent = endOfAgent,
         agentState = agentState,
+        rewindBeforeInvocationId = rewindBeforeInvocationId,
+        renderUiWidgets = renderUiWidgets,
+    )
+
+internal fun EventCompaction.toRecording(): EventCompactionRecording =
+    EventCompactionRecording(
+        startTimestamp = startTimestamp.toString(),
+        endTimestamp = endTimestamp.toString(),
+        compactedContent = compactedContent.toRecording(),
     )
 
 internal fun Message.toRecording(): MessageRecording =

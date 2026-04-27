@@ -9,10 +9,14 @@ import dev.adk.kotlin.AttachmentScope
 import dev.adk.kotlin.AuthConfig
 import dev.adk.kotlin.Event
 import dev.adk.kotlin.EventActions
+import dev.adk.kotlin.EventCompaction
+import dev.adk.kotlin.EventTranscription
+import dev.adk.kotlin.EventUsageMetadata
 import dev.adk.kotlin.Message
 import dev.adk.kotlin.MessageAttachment
 import dev.adk.kotlin.ToolConfirmation
 import dev.adk.kotlin.ToolMessage
+import dev.adk.kotlin.UiWidget
 import dev.adk.kotlin.UserMessage
 import dev.adk.kotlin.cli.AgentLoader
 import dev.adk.kotlin.cli.LoadedApp
@@ -86,22 +90,44 @@ data class EventPayload(
     val author: String,
     val content: MessagePayload? = null,
     val actions: EventActionsPayload,
+    val longRunningToolIds: Set<String>? = null,
     val branch: String? = null,
     val timestamp: String,
     val partial: Boolean,
     val turnComplete: Boolean,
+    val errorCode: String? = null,
+    val errorMessage: String? = null,
+    val finishReason: String? = null,
+    val usageMetadata: EventUsageMetadata? = null,
+    val avgLogprobs: Double? = null,
+    val interrupted: Boolean? = null,
+    val groundingMetadata: Map<String, Any?>? = null,
+    val customMetadata: Map<String, Any?>? = null,
+    val modelVersion: String? = null,
+    val inputTranscription: EventTranscription? = null,
+    val outputTranscription: EventTranscription? = null,
 )
 
 data class EventActionsPayload(
     val skipSummarization: Boolean? = null,
-    val stateDelta: Map<String, String?> = emptyMap(),
+    val stateDelta: Map<String, Any?> = emptyMap(),
     val artifactDelta: Map<String, Int> = emptyMap(),
+    val deletedArtifactIds: Set<String> = emptySet(),
     val requestedAuthConfigs: Map<String, Any?> = emptyMap(),
     val requestedToolConfirmations: Map<String, Any?> = emptyMap(),
     val transferToAgent: String? = null,
     val escalate: Boolean? = null,
+    val compaction: EventCompactionPayload? = null,
     val endOfAgent: Boolean? = null,
-    val agentState: Map<String, String>? = null,
+    val agentState: Map<String, Any?>? = null,
+    val rewindBeforeInvocationId: String? = null,
+    val renderUiWidgets: List<UiWidget>? = null,
+)
+
+data class EventCompactionPayload(
+    val startTimestamp: String,
+    val endTimestamp: String,
+    val compactedContent: MessagePayload,
 )
 
 class AdkWebServer(
@@ -525,10 +551,22 @@ private fun Event.toPayload(): EventPayload =
         author = author,
         content = content?.toPayload(),
         actions = actions.toPayload(),
+        longRunningToolIds = longRunningToolIds,
         branch = branch,
         timestamp = timestamp.toString(),
         partial = partial,
         turnComplete = turnComplete,
+        errorCode = errorCode,
+        errorMessage = errorMessage,
+        finishReason = finishReason,
+        usageMetadata = usageMetadata,
+        avgLogprobs = avgLogprobs,
+        interrupted = interrupted,
+        groundingMetadata = groundingMetadata,
+        customMetadata = customMetadata,
+        modelVersion = modelVersion,
+        inputTranscription = inputTranscription,
+        outputTranscription = outputTranscription,
     )
 
 private fun EventActions.toPayload(): EventActionsPayload =
@@ -536,12 +574,23 @@ private fun EventActions.toPayload(): EventActionsPayload =
         skipSummarization = skipSummarization,
         stateDelta = stateDelta,
         artifactDelta = artifactDelta,
+        deletedArtifactIds = deletedArtifactIds,
         requestedAuthConfigs = requestedAuthConfigs.mapValues { (_, value) -> value.toPayload() },
         requestedToolConfirmations = requestedToolConfirmations.mapValues { (_, value) -> value.toPayload() },
         transferToAgent = transferToAgent,
         escalate = escalate,
+        compaction = compaction?.toPayload(),
         endOfAgent = endOfAgent,
         agentState = agentState,
+        rewindBeforeInvocationId = rewindBeforeInvocationId,
+        renderUiWidgets = renderUiWidgets,
+    )
+
+private fun EventCompaction.toPayload(): EventCompactionPayload =
+    EventCompactionPayload(
+        startTimestamp = startTimestamp.toString(),
+        endTimestamp = endTimestamp.toString(),
+        compactedContent = compactedContent.toPayload(),
     )
 
 private fun AuthConfig.toPayload(): Map<String, Any?> =
