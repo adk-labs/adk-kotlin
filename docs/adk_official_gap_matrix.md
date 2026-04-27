@@ -2,7 +2,7 @@
 
 ## Reference Basis
 
-- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`46` files)
+- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`47` files)
 - Python reference reviewed: `../ref/adk-python/src/google/adk` (`536` Python files)
 - Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`188` Java files)
 
@@ -31,7 +31,7 @@ This matrix uses `adk-python` as the broadest feature baseline and
 | Built-in tool ecosystems | Search, MCP, OpenAPI, Google APIs, BigQuery, Spanner, computer use, retrieval | Application integration, MCP, retrieval, computer use | Internal ADK tools plus load memory/artifacts and agent tool; no external ecosystem toolsets yet | Partial | Add packaged MCP, OpenAPI, Google Search, Vertex AI Search, computer use, retrieval, and cloud data toolsets | P2 |
 | Memory services | Multiple memory services and memory tools | Memory package | Base memory service, in-memory memory service, load/preload memory tools | Partial | Add Vertex/RAG memory services, richer ranking/search metadata, memory entry schema parity, and persistence backends | P1 |
 | Plugins | Logging, global instruction, retry, multimodal, save-files-as-artifacts | Plugin manager and plugins | Plugin interface/manager plus logging, global instruction, context filter, debug logging, multimodal tool results, save-files, recordings | Partial | Add reflect/retry plugin, BigQuery analytics, official agent callback integration, telemetry context propagation, and plugin package layout | P1 |
-| Events and event actions | Full event model, event actions, UI widgets | Full event model | Event model with action deltas, compaction metadata, UI widgets, long-running IDs, streaming/error/model metadata | Partial | Add genai-style content parts/function calls, event stream abstraction, event compactor/summarizer integration, and official JSON conversion | P0 |
+| Events and event actions | Full event model, event actions, UI widgets | Full event model | Event model with action deltas, compaction metadata, UI widgets, long-running IDs, streaming/error/model metadata, `EventStream` | Partial | Add genai-style content parts/function calls, event compactor/summarizer integration, and official JSON conversion | P0 |
 | Streaming and multimodal flows | Audio/transcription/cache managers, live request queue | Audio/streaming support in flows | SSE web endpoint, streaming event flags, multimodal tool-result plugin metadata | Partial | Add live request queue, bidi/audio/video runtime, transcription managers, cache managers, and model connection streaming parity | P1 |
 | Planner support | Built-in planner, ReAct planner, planning flow processor | Planning in `LlmAgent` / flows | `BasePlanner`, `BuiltInPlanner`, `PlanReActPlanner` | Partial | Align official planner prompts/config, integrate with flow processors, expose planner package APIs, and add planning tests against reference semantics | P2 |
 | Non-LLM agent types | Sequential, parallel, loop, langgraph, remote A2A | Sequential, parallel, loop | Sequential/parallel/loop DSL and runner execution semantics | Partial | Add dedicated class hierarchy/configs, branch/history isolation parity, langgraph/remote A2A agent types, and richer composite result semantics | P1 |
@@ -71,9 +71,9 @@ This matrix uses `adk-python` as the broadest feature baseline and
    - The model/provider API is present, but Gemini/Claude/Apigee still require
      explicit test transports. Real transport implementations are the next
      utility gap.
-2. Event stream, compaction, summarizer integration
-   - The event model is present, but official runtime behavior needs event
-     stream abstraction, event compaction, and summarizer hooks.
+2. Event compaction and summarizer integration
+   - The event model and event stream type are present, but official runtime
+     behavior still needs event compaction and summarizer hooks.
 3. Tool ecosystem modules
    - MCP, OpenAPI, Google Search, Vertex AI Search, retrieval, computer use,
      and long-running function tools are still large user-visible gaps.
