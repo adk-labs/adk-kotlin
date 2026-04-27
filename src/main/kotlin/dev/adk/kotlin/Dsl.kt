@@ -69,11 +69,7 @@ class LlmAgentDsl internal constructor(
             modelRef = value
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
-                ?.let { modelName ->
-                    Model.builder()
-                        .modelName(modelName)
-                        .build()
-                }
+                ?.let(::model)
         }
     var description: String = ""
     var generateContentConfig: GenerateContentConfig? = null
@@ -128,10 +124,7 @@ class LlmAgentDsl internal constructor(
 
     fun model(model: BaseLlm) {
         this.model = null
-        modelRef =
-            Model.builder()
-                .model(model)
-                .build()
+        modelRef = dev.adk.kotlin.model(model)
     }
 
     fun model(model: Model) {

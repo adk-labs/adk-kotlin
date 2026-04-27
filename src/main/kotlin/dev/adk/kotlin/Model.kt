@@ -41,6 +41,16 @@ data class Model(
     }
 }
 
+fun model(modelName: String): Model =
+    Model(
+        modelName = modelName.trim().takeIf { it.isNotEmpty() },
+    )
+
+fun model(model: BaseLlm): Model =
+    Model(
+        model = model,
+    )
+
 fun interface LanguageModel {
     suspend fun generate(request: ModelRequest): ModelResponse
 }

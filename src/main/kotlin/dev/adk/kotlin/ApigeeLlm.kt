@@ -1,5 +1,22 @@
 package dev.adk.kotlin
 
+fun apigeeLlm(
+    modelName: String,
+    proxyUrl: String? = null,
+    customHeaders: Map<String, String> = emptyMap(),
+    transport: LlmTransport? = null,
+    connectionFactory: LlmConnectionFactory? = null,
+    modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+): ApigeeLlm =
+    ApigeeLlm.builder()
+        .modelName(modelName)
+        .proxyUrl(proxyUrl)
+        .customHeaders(customHeaders)
+        .transport(transport)
+        .connectionFactory(connectionFactory)
+        .modelCapabilities(modelCapabilities)
+        .build()
+
 class ApigeeLlm private constructor(
     modelName: String,
     val proxyUrl: String? = null,

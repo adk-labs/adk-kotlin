@@ -1,5 +1,22 @@
 package dev.adk.kotlin
 
+fun claude(
+    modelName: String,
+    apiKey: String? = null,
+    maxTokens: Int = Claude.DEFAULT_MAX_TOKENS,
+    transport: LlmTransport? = null,
+    connectionFactory: LlmConnectionFactory? = null,
+    modelCapabilities: ModelCapabilities = Claude.DEFAULT_MODEL_CAPABILITIES,
+): Claude =
+    Claude.builder()
+        .modelName(modelName)
+        .apiKey(apiKey)
+        .maxTokens(maxTokens)
+        .transport(transport)
+        .connectionFactory(connectionFactory)
+        .modelCapabilities(modelCapabilities)
+        .build()
+
 class Claude private constructor(
     modelName: String,
     val apiKey: String? = null,

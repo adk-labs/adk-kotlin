@@ -187,10 +187,10 @@ class AgentDslTest {
     @Test
     fun `supports direct BaseLlm instances in the Kotlin DSL`() {
         val gemini =
-            Gemini.builder()
-                .modelName("gemini-2.5-pro")
-                .transport { _, _ -> ModelResponse.Final("ok") }
-                .build()
+            gemini(
+                modelName = "gemini-2.5-pro",
+                transport = LlmTransport { _, _ -> ModelResponse.Final("ok") },
+            )
 
         val built =
             agent("planner") {

@@ -20,12 +20,14 @@ class RunnerTest {
     fun `runner prefers an agent-bound BaseLlm over the fallback model`() =
         runTest {
             val boundLlm =
-                Gemini.builder()
-                    .modelName("gemini-bound")
-                    .transport { request, _ ->
-                        assertEquals("gemini-bound", request.model)
-                        ModelResponse.Final("Bound provider response.")
-                    }.build()
+                gemini(
+                    modelName = "gemini-bound",
+                    transport =
+                        LlmTransport { request, _ ->
+                            assertEquals("gemini-bound", request.model)
+                            ModelResponse.Final("Bound provider response.")
+                        },
+                )
 
             val app =
                 adkApp("bound-provider-app") {

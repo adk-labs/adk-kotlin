@@ -294,16 +294,18 @@ directly to an agent, or registered explicitly when a transport is available:
 
 ```kotlin
 val gemini =
-    Gemini.builder()
-        .modelName("gemini-2.5-pro")
-        .vertexCredentials(
-            VertexCredentials.builder()
-                .project("my-project")
-                .location("us-central1")
-                .build(),
-        ).transport { request, stream ->
-            ModelResponse.Final("Implement provider call here.")
-        }.build()
+    gemini(
+        modelName = "gemini-2.5-pro",
+        vertexCredentials =
+            vertexCredentials(
+                project = "my-project",
+                location = "us-central1",
+            ),
+        transport =
+            LlmTransport { request, stream ->
+                ModelResponse.Final("Implement provider call here.")
+            },
+    )
 
 val app =
     adkApp("travel-assistant") {

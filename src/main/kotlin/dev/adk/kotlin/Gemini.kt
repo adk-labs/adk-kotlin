@@ -1,5 +1,22 @@
 package dev.adk.kotlin
 
+fun gemini(
+    modelName: String,
+    apiKey: String? = null,
+    vertexCredentials: VertexCredentials? = null,
+    transport: LlmTransport? = null,
+    connectionFactory: LlmConnectionFactory? = null,
+    modelCapabilities: ModelCapabilities = Gemini.DEFAULT_MODEL_CAPABILITIES,
+): Gemini =
+    Gemini.builder()
+        .modelName(modelName)
+        .apiKey(apiKey)
+        .vertexCredentials(vertexCredentials)
+        .transport(transport)
+        .connectionFactory(connectionFactory)
+        .modelCapabilities(modelCapabilities)
+        .build()
+
 class Gemini private constructor(
     modelName: String,
     val apiKey: String? = null,

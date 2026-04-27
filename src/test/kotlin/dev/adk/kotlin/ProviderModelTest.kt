@@ -11,17 +11,11 @@ import kotlin.test.assertTrue
 
 class ProviderModelTest {
     @Test
-    fun `model builder accepts either model name or model instance`() {
-        val gemini = Gemini.builder().modelName("gemini-2.5-pro").build()
+    fun `model factory accepts either model name or model instance`() {
+        val gemini = gemini("gemini-2.5-pro")
 
-        val byName =
-            Model.builder()
-                .modelName("gemini-2.5-pro")
-                .build()
-        val byInstance =
-            Model.builder()
-                .model(gemini)
-                .build()
+        val byName = model("gemini-2.5-pro")
+        val byInstance = model(gemini)
 
         assertEquals("gemini-2.5-pro", byName.resolvedModelName())
         assertEquals("gemini-2.5-pro", byInstance.resolvedModelName())
@@ -36,23 +30,25 @@ class ProviderModelTest {
     }
 
     @Test
-    fun `gemini builder delegates through transport`() =
+    fun `gemini factory delegates through transport`() =
         runTest {
             var observedStream = false
             val gemini =
-                Gemini.builder()
-                    .modelName("gemini-2.5-pro")
-                    .apiKey("test-key")
-                    .vertexCredentials(
-                        VertexCredentials.builder()
-                            .project("project-1")
-                            .location("us-central1")
-                            .build(),
-                    ).transport { request, stream ->
-                        observedStream = stream
-                        assertEquals("gemini-2.5-pro", request.model)
-                        ModelResponse.Final("gemini:$stream")
-                    }.build()
+                gemini(
+                    modelName = "gemini-2.5-pro",
+                    apiKey = "test-key",
+                    vertexCredentials =
+                        vertexCredentials(
+                            project = "project-1",
+                            location = "us-central1",
+                        ),
+                    transport =
+                        LlmTransport { request, stream ->
+                            observedStream = stream
+                            assertEquals("gemini-2.5-pro", request.model)
+                            ModelResponse.Final("gemini:$stream")
+                        },
+                )
 
             val response =
                 gemini.generate(
@@ -78,14 +74,14 @@ class ProviderModelTest {
         }
 
     @Test
-    fun `claude builder keeps max tokens and custom capabilities`() {
+    fun `claude factory keeps max tokens and custom capabilities`() {
         val claude =
-            Claude.builder()
-                .modelName("claude-3-7-sonnet")
-                .apiKey("anthropic-key")
-                .maxTokens(4096)
-                .modelCapabilities(ModelCapabilities(supportsOutputSchemaWithTools = true))
-                .build()
+            claude(
+                modelName = "claude-3-7-sonnet",
+                apiKey = "anthropic-key",
+                maxTokens = 4096,
+                modelCapabilities = ModelCapabilities(supportsOutputSchemaWithTools = true),
+            )
 
         assertEquals("anthropic-key", claude.apiKey)
         assertEquals(4096, claude.maxTokens)
@@ -93,29 +89,25 @@ class ProviderModelTest {
     }
 
     @Test
-    fun `apigee builder validates model string and exposes derived fields`() {
+    fun `apigee factory validates model string and exposes derived fields`() {
         val apigee =
-            ApigeeLlm.builder()
-                .modelName("apigee/vertex_ai/v1/gemini-2.5-flash")
-                .proxyUrl("https://apigee.example.com")
-                .customHeaders(mapOf("x-test" to "1"))
-                .build()
+            apigeeLlm(
+                modelName = "apigee/vertex_ai/v1/gemini-2.5-flash",
+                proxyUrl = "https://apigee.example.com",
+                customHeaders = mapOf("x-test" to "1"),
+            )
 
         assertEquals("https://apigee.example.com", apigee.effectiveProxyUrl)
         assertTrue(apigee.usesVertexAi)
         assertEquals("v1", apigee.apiVersion)
 
         val defaultGeminiApigee =
-            ApigeeLlm.builder()
-                .modelName("apigee/gemini-2.5-flash")
-                .build()
+            apigeeLlm("apigee/gemini-2.5-flash")
         assertFalse(defaultGeminiApigee.usesVertexAi)
         assertNull(defaultGeminiApigee.apiVersion)
 
         assertFailsWith<IllegalArgumentException> {
-            ApigeeLlm.builder()
-                .modelName("apigee/vertex_ai/v1")
-                .build()
+            apigeeLlm("apigee/vertex_ai/v1")
         }
     }
 }

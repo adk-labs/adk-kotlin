@@ -1,5 +1,16 @@
 package dev.adk.kotlin
 
+fun vertexCredentials(
+    project: String? = null,
+    location: String? = null,
+    credentials: Any? = null,
+): VertexCredentials =
+    VertexCredentials(
+        project = project?.trim()?.takeIf { it.isNotEmpty() },
+        location = location?.trim()?.takeIf { it.isNotEmpty() },
+        credentials = credentials,
+    )
+
 data class VertexCredentials(
     val project: String? = null,
     val location: String? = null,

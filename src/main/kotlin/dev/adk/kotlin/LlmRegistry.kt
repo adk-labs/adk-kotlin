@@ -38,11 +38,11 @@ object LlmRegistry : ModelResolver {
         transportFactory: LlmTransportFactory,
     ) {
         registerLlm(modelNamePattern) { modelName ->
-            Gemini.builder()
-                .modelName(modelName)
-                .modelCapabilities(modelCapabilities)
-                .transport(transportFactory.create(modelName))
-                .build()
+            gemini(
+                modelName = modelName,
+                modelCapabilities = modelCapabilities,
+                transport = transportFactory.create(modelName),
+            )
         }
     }
 
@@ -64,11 +64,11 @@ object LlmRegistry : ModelResolver {
         transportFactory: LlmTransportFactory,
     ) {
         registerLlm(modelNamePattern) { modelName ->
-            Claude.builder()
-                .modelName(modelName)
-                .modelCapabilities(modelCapabilities)
-                .transport(transportFactory.create(modelName))
-                .build()
+            claude(
+                modelName = modelName,
+                modelCapabilities = modelCapabilities,
+                transport = transportFactory.create(modelName),
+            )
         }
     }
 
@@ -90,11 +90,11 @@ object LlmRegistry : ModelResolver {
         transportFactory: LlmTransportFactory,
     ) {
         registerLlm(modelNamePattern) { modelName ->
-            ApigeeLlm.builder()
-                .modelName(modelName)
-                .modelCapabilities(modelCapabilities)
-                .transport(transportFactory.create(modelName))
-                .build()
+            apigeeLlm(
+                modelName = modelName,
+                modelCapabilities = modelCapabilities,
+                transport = transportFactory.create(modelName),
+            )
         }
     }
 
