@@ -66,6 +66,35 @@ class EventModelTest {
     }
 
     @Test
+    fun `event actions normalize null state deltas to removed sentinel`() {
+        val actions =
+            EventActions(
+                stateDelta =
+                    mapOf(
+                        "temp:draft" to null,
+                        "profile" to mapOf("name" to "Alice"),
+                    ),
+            )
+
+        assertEquals(STATE_REMOVED, actions.stateDelta["temp:draft"])
+        assertEquals(mapOf("name" to "Alice"), actions.stateDelta["profile"])
+    }
+
+    @Test
+    fun `event actions merge null state deltas as removed sentinel`() {
+        val merged =
+            EventActions(
+                stateDelta = mapOf("temp:draft" to "old"),
+            ).merge(
+                EventActions(
+                    stateDelta = mapOf("temp:draft" to null),
+                ),
+            )
+
+        assertEquals(STATE_REMOVED, merged.stateDelta["temp:draft"])
+    }
+
+    @Test
     fun `event final response follows official skip long-running and model content semantics`() {
         assertTrue(
             Event(

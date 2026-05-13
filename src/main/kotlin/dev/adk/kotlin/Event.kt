@@ -29,9 +29,9 @@ data class EventCompaction(
     val compactedContent: Message,
 ) : Serializable
 
-data class EventActions(
+class EventActions(
     val skipSummarization: Boolean? = null,
-    val stateDelta: Map<String, Any?> = emptyMap(),
+    stateDelta: Map<String, Any?> = emptyMap(),
     val artifactDelta: Map<String, Int> = emptyMap(),
     val deletedArtifactIds: Set<String> = emptySet(),
     val requestedAuthConfigs: Map<String, AuthConfig> = emptyMap(),
@@ -44,9 +44,42 @@ data class EventActions(
     val rewindBeforeInvocationId: String? = null,
     val renderUiWidgets: List<UiWidget>? = null,
 ) : Serializable {
+    val stateDelta: Map<String, Any?> = normalizeStateDelta(stateDelta)
+
     fun removeStateByKey(key: String): EventActions =
         copy(
             stateDelta = stateDelta + (key to STATE_REMOVED),
+        )
+
+    fun copy(
+        skipSummarization: Boolean? = this.skipSummarization,
+        stateDelta: Map<String, Any?> = this.stateDelta,
+        artifactDelta: Map<String, Int> = this.artifactDelta,
+        deletedArtifactIds: Set<String> = this.deletedArtifactIds,
+        requestedAuthConfigs: Map<String, AuthConfig> = this.requestedAuthConfigs,
+        requestedToolConfirmations: Map<String, ToolConfirmation> = this.requestedToolConfirmations,
+        transferToAgent: String? = this.transferToAgent,
+        escalate: Boolean? = this.escalate,
+        compaction: EventCompaction? = this.compaction,
+        endOfAgent: Boolean? = this.endOfAgent,
+        agentState: Map<String, Any?>? = this.agentState,
+        rewindBeforeInvocationId: String? = this.rewindBeforeInvocationId,
+        renderUiWidgets: List<UiWidget>? = this.renderUiWidgets,
+    ): EventActions =
+        EventActions(
+            skipSummarization = skipSummarization,
+            stateDelta = stateDelta,
+            artifactDelta = artifactDelta,
+            deletedArtifactIds = deletedArtifactIds,
+            requestedAuthConfigs = requestedAuthConfigs,
+            requestedToolConfirmations = requestedToolConfirmations,
+            transferToAgent = transferToAgent,
+            escalate = escalate,
+            compaction = compaction,
+            endOfAgent = endOfAgent,
+            agentState = agentState,
+            rewindBeforeInvocationId = rewindBeforeInvocationId,
+            renderUiWidgets = renderUiWidgets,
         )
 
     fun merge(other: EventActions): EventActions =
@@ -80,12 +113,13 @@ data class EventActions(
         current: Map<String, Any?>,
         incoming: Map<String, Any?>,
     ): Map<String, Any?> {
-        if (incoming.isEmpty()) {
+        val normalizedIncoming = normalizeStateDelta(incoming)
+        if (normalizedIncoming.isEmpty()) {
             return current
         }
 
         val merged = current.toMutableMap()
-        incoming.forEach { (key, value) ->
+        normalizedIncoming.forEach { (key, value) ->
             merged[key] = deepMerge(merged[key], value)
         }
         return merged.toMap()
@@ -104,6 +138,66 @@ data class EventActions(
         val incomingMap = incoming as Map<String, Any?>
         return mergeStateDeltas(merged, incomingMap)
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) {
+            return true
+        }
+        if (other !is EventActions) {
+            return false
+        }
+
+        return skipSummarization == other.skipSummarization &&
+            stateDelta == other.stateDelta &&
+            artifactDelta == other.artifactDelta &&
+            deletedArtifactIds == other.deletedArtifactIds &&
+            requestedAuthConfigs == other.requestedAuthConfigs &&
+            requestedToolConfirmations == other.requestedToolConfirmations &&
+            transferToAgent == other.transferToAgent &&
+            escalate == other.escalate &&
+            compaction == other.compaction &&
+            endOfAgent == other.endOfAgent &&
+            agentState == other.agentState &&
+            rewindBeforeInvocationId == other.rewindBeforeInvocationId &&
+            renderUiWidgets == other.renderUiWidgets
+    }
+
+    override fun hashCode(): Int {
+        var result = skipSummarization?.hashCode() ?: 0
+        result = 31 * result + stateDelta.hashCode()
+        result = 31 * result + artifactDelta.hashCode()
+        result = 31 * result + deletedArtifactIds.hashCode()
+        result = 31 * result + requestedAuthConfigs.hashCode()
+        result = 31 * result + requestedToolConfirmations.hashCode()
+        result = 31 * result + (transferToAgent?.hashCode() ?: 0)
+        result = 31 * result + (escalate?.hashCode() ?: 0)
+        result = 31 * result + (compaction?.hashCode() ?: 0)
+        result = 31 * result + (endOfAgent?.hashCode() ?: 0)
+        result = 31 * result + (agentState?.hashCode() ?: 0)
+        result = 31 * result + (rewindBeforeInvocationId?.hashCode() ?: 0)
+        result = 31 * result + (renderUiWidgets?.hashCode() ?: 0)
+        return result
+    }
+
+    override fun toString(): String =
+        "EventActions(" +
+            "skipSummarization=$skipSummarization, " +
+            "stateDelta=$stateDelta, " +
+            "artifactDelta=$artifactDelta, " +
+            "deletedArtifactIds=$deletedArtifactIds, " +
+            "requestedAuthConfigs=$requestedAuthConfigs, " +
+            "requestedToolConfirmations=$requestedToolConfirmations, " +
+            "transferToAgent=$transferToAgent, " +
+            "escalate=$escalate, " +
+            "compaction=$compaction, " +
+            "endOfAgent=$endOfAgent, " +
+            "agentState=$agentState, " +
+            "rewindBeforeInvocationId=$rewindBeforeInvocationId, " +
+            "renderUiWidgets=$renderUiWidgets" +
+            ")"
+
+    private fun normalizeStateDelta(stateDelta: Map<String, Any?>): Map<String, Any?> =
+        stateDelta.mapValues { (_, value) -> value ?: STATE_REMOVED }
 }
 
 data class Event(
