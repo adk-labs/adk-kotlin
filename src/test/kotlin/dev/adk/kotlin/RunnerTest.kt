@@ -1765,6 +1765,7 @@ class RunnerTest {
 
             assertEquals("Persist me.", result.finalMessage)
             assertEquals("Persist me.", result.session.state["planner_output"])
+            assertEquals("Persist me.", result.events.last().actions.stateDelta["planner_output"])
             assertEquals("Persist me.", result.events.last().actions.agentState?.get("planner_output"))
         }
 
