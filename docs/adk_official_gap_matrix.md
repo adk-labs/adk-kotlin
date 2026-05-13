@@ -2,9 +2,9 @@
 
 ## Reference Basis
 
-- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`47` files)
+- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`48` files)
 - Python reference reviewed: `../ref/adk-python/src/google/adk` (`536` Python files)
-- Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`188` Java files)
+- Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`194` Java files)
 
 This matrix uses `adk-python` as the broadest feature baseline and
 `adk-java/core` as the closest official JVM baseline.
@@ -42,7 +42,7 @@ This matrix uses `adk-python` as the broadest feature baseline and
 | Evaluation and optimization | Large evaluation/optimizer/simulator stack | Samples and evaluation-adjacent utilities | None | Missing | Defer until event model, sessions, and provider integrations exist | P3 |
 | Integrations | Slack, LangChain, CrewAI, registry modules | Some integration-oriented tooling | None | Missing | Defer until stable tool/provider/plugin APIs exist | P3 |
 | Telemetry and tracing | Dedicated telemetry package | Dedicated telemetry package | None | Missing | Add tracing abstraction, span export, request/response metadata capture, and plugin/runner integration | P2 |
-| Skills, platform, features, misc utils | Separate skills/platform/features/errors/utils packages | Utility packages | Minimal inline utilities and typed errors only | Missing | Add platform/time/uuid shims, feature registry, utility packages, and official error hierarchy when concrete modules need them | P3 |
+| Skills, platform, features, misc utils | Separate skills/platform/features/errors/utils packages | `skills` package, utility packages | `SkillSource`, `Frontmatter`, in-memory/local skill sources; minimal inline platform/utils and typed errors | Partial | Wire skills into prompt/tool flows where official SDKs consume them, then add platform/time/uuid shims, feature registry, utility packages, and official error hierarchy when concrete modules need them | P2 |
 
 ## What Is Already Strong In Kotlin
 
@@ -64,6 +64,10 @@ This matrix uses `adk-python` as the broadest feature baseline and
   Kotlin now has event action deltas, compaction metadata, UI widget metadata,
   long-running tool IDs, streaming/error/model metadata, and export paths through
   web payloads and recordings.
+- The official skills substrate is now present.
+  Kotlin now has frontmatter parsing/validation, in-memory skill loading, local
+  `SKILL.md` discovery, instruction extraction, and resource loading with
+  official API names.
 
 ## Highest-Value Next Implementation Order
 
