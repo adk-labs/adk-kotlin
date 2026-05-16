@@ -2,9 +2,9 @@
 
 ## Reference Basis
 
-- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`48` files)
+- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`49` files)
 - Python reference reviewed: `../ref/adk-python/src/google/adk` (`536` Python files)
-- Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`194` Java files)
+- Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`195` Java files)
 
 This matrix uses `adk-python` as the broadest feature baseline and
 `adk-java/core` as the closest official JVM baseline.
@@ -26,7 +26,7 @@ This matrix uses `adk-python` as the broadest feature baseline and
 | Runner/runtime loop | Full runner with services, plugins, memory, tracing | Full runner with services, plugins, memory, tracing | Runner with tool loop, transfer, structured output, plugins, memory, artifacts, code execution, composite agent execution, event callbacks | Partial | Add full event stream abstraction, run config parity, tracing/telemetry, live runtime, and official flow processor decomposition | P0 |
 | Session services | In-memory, sqlite, database, Vertex, migration support | Session services, Vertex, JSON conversion | `SessionStore`, in-memory and file-backed stores | Partial | Add sqlite/database/Vertex services, schema migration/versioning, event paging, and official session JSON conversion | P1 |
 | Artifact services | Base, in-memory, file, GCS, version metadata, delete/list | Base, in-memory, GCS | Base interface, in-memory/file services, versioned save/load/list/delete | Partial | Add GCS/cloud-backed service, official response types, artifact namespace parity, and binary/mime-rich artifact content | P1 |
-| Model/provider layer | Multiple provider implementations, registry, request/response config | Model abstraction and registry | `Model`, `BaseLlm`, Gemini/Claude/Apigee models, explicit transport registry, capabilities, generate config | Partial | Add real provider transports/connections, Gemini connection parity, request/response metadata propagation, and provider-specific utilities | P0 |
+| Model/provider layer | Multiple provider implementations, registry, request/response config | Model abstraction, registry, Chat Completions HTTP client | `Model`, `BaseLlm`, Gemini/Claude/Apigee models, explicit transport registry, OpenAI-compatible chat-completions HTTP transport, capabilities, generate config | Partial | Add streaming Chat Completions, first-party Gemini/Claude transports/connections, request/response metadata propagation, and provider-specific utilities | P0 |
 | Tool base runtime | Base tool classes, toolsets, tool config, confirmations, agent tools | Base tools, transfer/set-model-response, MCP/computer-use/retrieval | Tool schema, function tools, toolsets, confirmations, auth hooks, agent tool, load/preload memory, load artifacts | Partial | Add official function declaration conversion depth, long-running function tools, MCP/OpenAPI/retrieval/computer-use toolsets, and richer tool config | P0 |
 | Built-in tool ecosystems | Search, MCP, OpenAPI, Google APIs, BigQuery, Spanner, computer use, retrieval | Application integration, MCP, retrieval, computer use | Internal ADK tools plus load memory/artifacts and agent tool; no external ecosystem toolsets yet | Partial | Add packaged MCP, OpenAPI, Google Search, Vertex AI Search, computer use, retrieval, and cloud data toolsets | P2 |
 | Memory services | Multiple memory services and memory tools | Memory package | Base memory service, in-memory memory service, load/preload memory tools | Partial | Add Vertex/RAG memory services, richer ranking/search metadata, memory entry schema parity, and persistence backends | P1 |
@@ -68,13 +68,16 @@ This matrix uses `adk-python` as the broadest feature baseline and
   Kotlin now has frontmatter parsing/validation, in-memory skill loading, local
   `SKILL.md` discovery, instruction extraction, and resource loading with
   official API names.
+- The model layer now has a concrete HTTP transport path.
+  Kotlin now includes an OpenAI-compatible Chat Completions HTTP client and
+  `LlmTransport` adapter for non-streaming provider calls.
 
 ## Highest-Value Next Implementation Order
 
 1. Real provider transports and streaming connections
-   - The model/provider API is present, but Gemini/Claude/Apigee still require
-     explicit test transports. Real transport implementations are the next
-     utility gap.
+   - The model/provider API and non-streaming Chat Completions HTTP transport
+     are present, but Gemini/Claude first-party transports, streaming, and live
+     connections remain the next utility gap.
 2. Event compaction and summarizer integration
    - The event model and event stream type are present, but official runtime
      behavior still needs event compaction and summarizer hooks.
