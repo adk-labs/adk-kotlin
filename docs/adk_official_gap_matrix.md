@@ -2,7 +2,7 @@
 
 ## Reference Basis
 
-- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`50` files)
+- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`51` files)
 - Python reference reviewed: `../ref/adk-python/src/google/adk` (`536` Python files)
 - Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`195` Java files)
 
@@ -42,7 +42,7 @@ This matrix uses `adk-python` as the broadest feature baseline and
 | Evaluation and optimization | Large evaluation/optimizer/simulator stack | Samples and evaluation-adjacent utilities | None | Missing | Defer until event model, sessions, and provider integrations exist | P3 |
 | Integrations | Slack, LangChain, CrewAI, registry modules | Some integration-oriented tooling | None | Missing | Defer until stable tool/provider/plugin APIs exist | P3 |
 | Telemetry and tracing | Dedicated telemetry package | Dedicated telemetry package | None | Missing | Add tracing abstraction, span export, request/response metadata capture, and plugin/runner integration | P2 |
-| Skills, platform, features, misc utils | Separate skills/platform/features/errors/utils packages | `skills` package, utility packages | `SkillSource`, `Frontmatter`, in-memory/local skill sources; minimal inline platform/utils and typed errors | Partial | Wire skills into prompt/tool flows where official SDKs consume them, then add platform/time/uuid shims, feature registry, utility packages, and official error hierarchy when concrete modules need them | P2 |
+| Skills, platform, features, misc utils | Separate skills/platform/features/errors/utils packages | `skills` package, utility packages | `SkillSource`, `Frontmatter`, in-memory/local skill sources, `SkillToolset` list/load/resource tools; minimal inline platform/utils and typed errors | Partial | Add skill registry integrations/search, script execution, platform/time/uuid shims, feature registry, utility packages, and official error hierarchy when concrete modules need them | P2 |
 
 ## What Is Already Strong In Kotlin
 
@@ -74,6 +74,9 @@ This matrix uses `adk-python` as the broadest feature baseline and
 - App-level event compaction is now wired into runtime persistence.
   Kotlin now has `EventsCompactionConfig`, `BaseEventsSummarizer`, sliding-window
   and token-threshold compaction helpers, plus a post-run Runner hook.
+- Skills are now visible to agents through tools.
+  Kotlin now injects the official skill instruction wording and exposes
+  `list_skills`, `load_skill`, and `load_skill_resource` through `SkillToolset`.
 
 ## Highest-Value Next Implementation Order
 
