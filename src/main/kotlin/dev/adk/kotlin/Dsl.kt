@@ -33,6 +33,8 @@ class AppDsl internal constructor(
 ) {
     private var rootAgent: LlmAgent? = null
     private var globalInstruction: InstructionTemplate? = null
+    private var eventsCompactionConfig: EventsCompactionConfig? = null
+    private var resumabilityConfig: ResumabilityConfig? = null
 
     fun globalInstruction(
         text: String,
@@ -51,11 +53,34 @@ class AppDsl internal constructor(
         rootAgent = agent
     }
 
+    fun eventsCompactionConfig(
+        compactionInterval: Int,
+        overlapSize: Int,
+        summarizer: BaseEventsSummarizer? = null,
+        tokenThreshold: Int? = null,
+        eventRetentionSize: Int? = null,
+    ) {
+        eventsCompactionConfig =
+            EventsCompactionConfig(
+                summarizer = summarizer,
+                compactionInterval = compactionInterval,
+                overlapSize = overlapSize,
+                tokenThreshold = tokenThreshold,
+                eventRetentionSize = eventRetentionSize,
+            )
+    }
+
+    fun resumabilityConfig(isResumable: Boolean = false) {
+        resumabilityConfig = ResumabilityConfig(isResumable = isResumable)
+    }
+
     internal fun build(): AdkApp =
         AdkApp(
             name = name,
             rootAgent = requireNotNull(rootAgent) { "A root agent must be defined." },
             globalInstruction = globalInstruction,
+            eventsCompactionConfig = eventsCompactionConfig,
+            resumabilityConfig = resumabilityConfig,
         )
 }
 

@@ -965,16 +965,17 @@ class Runner(
                 updatedAt = Instant.now(),
             )
         sessionStore.save(app.name, savedSession)
+        val compactedSession = runCompactionForSlidingWindow(app, savedSession, sessionStore)
         val finalAgentName =
             app.findAgent(finalEvent.author)?.name
                 ?: fallbackAgentName
         return RunResult(
-            session = savedSession,
+            session = compactedSession,
             finalMessage = finalEvent.content?.text.orEmpty(),
             finalAgentName = finalAgentName,
             structuredResponse = structuredResponse,
             toolExecutions = toolExecutions.toList(),
-            events = events.toList(),
+            events = compactedSession.events,
         )
     }
 

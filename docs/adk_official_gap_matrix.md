@@ -2,7 +2,7 @@
 
 ## Reference Basis
 
-- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`49` files)
+- Kotlin source reviewed: `src/main/kotlin/dev/adk/kotlin` (`50` files)
 - Python reference reviewed: `../ref/adk-python/src/google/adk` (`536` Python files)
 - Java reference reviewed: `../ref/adk-java/core/src/main/java/com/google/adk` (`195` Java files)
 
@@ -20,10 +20,10 @@ This matrix uses `adk-python` as the broadest feature baseline and
 | Capability Area | adk-python | adk-java | adk-kotlin | Status | Remaining Kotlin Work | Priority |
 | --- | --- | --- | --- | --- | --- | --- |
 | Public API naming and core entry points | `Agent`, `Context`, `Runner`, app-level modules | `App`, `LlmAgent`, `Runner`, builders | `App`/`Agent`/`Context` aliases, `app(...)`, `agent(...)`, `Runner`, Kotlin-first factories | Partial | Keep aligning deeper config names, package/module layout, and builder/config surfaces beyond current aliases | P0 |
-| App container and root agent model | `apps/app.py`, compaction, summarizer hooks | `apps/App.java`, cache/compaction config | `AdkApp` with root agent, global instruction, transfer tree helpers | Partial | Add app-level context cache, compaction/summarizer config, service composition, and richer app metadata | P0 |
+| App container and root agent model | `apps/app.py`, compaction, summarizer hooks | `apps/App.java`, cache/compaction config | `AdkApp` with root agent, global instruction, transfer tree helpers, events compaction config, resumability config | Partial | Add app-level context cache, service composition, richer app metadata, and first-party summarizer implementations | P0 |
 | LLM agent core | Rich `LlmAgent` fields, callbacks, schemas, planners, code executors | Rich `LlmAgent` builder/config/flow selection | `LlmAgent` with model, instructions, tools/toolsets, schemas, output key, planner, code executor, sub-agents, transfer flags | Partial | Add official agent callbacks, config schemas/loading parity, active streaming tools, context cache config, and fuller flow selection | P0 |
 | Prompt assembly semantics | Identity, instructions, output schema, transfer, artifacts, cache processors | Identity, instructions, output schema, transfer, artifacts | Official identity/transfer/output-schema wording, global/static/dynamic instruction placement, artifact interpolation, include contents | Partial | Add context cache processor, request confirmation prompt processing, richer content/function-response formatting, and memory/artifact prompt processors | P0 |
-| Runner/runtime loop | Full runner with services, plugins, memory, tracing | Full runner with services, plugins, memory, tracing | Runner with tool loop, transfer, structured output, plugins, memory, artifacts, code execution, composite agent execution, event callbacks | Partial | Add full event stream abstraction, run config parity, tracing/telemetry, live runtime, and official flow processor decomposition | P0 |
+| Runner/runtime loop | Full runner with services, plugins, memory, tracing | Full runner with services, plugins, memory, tracing | Runner with tool loop, transfer, structured output, plugins, memory, artifacts, code execution, composite agent execution, event callbacks, post-run compaction hook | Partial | Add full event stream abstraction, run config parity, tracing/telemetry, live runtime, and official flow processor decomposition | P0 |
 | Session services | In-memory, sqlite, database, Vertex, migration support | Session services, Vertex, JSON conversion | `SessionStore`, in-memory and file-backed stores | Partial | Add sqlite/database/Vertex services, schema migration/versioning, event paging, and official session JSON conversion | P1 |
 | Artifact services | Base, in-memory, file, GCS, version metadata, delete/list | Base, in-memory, GCS | Base interface, in-memory/file services, versioned save/load/list/delete | Partial | Add GCS/cloud-backed service, official response types, artifact namespace parity, and binary/mime-rich artifact content | P1 |
 | Model/provider layer | Multiple provider implementations, registry, request/response config | Model abstraction, registry, Chat Completions HTTP client | `Model`, `BaseLlm`, Gemini/Claude/Apigee models, explicit transport registry, OpenAI-compatible chat-completions HTTP transport, capabilities, generate config | Partial | Add streaming Chat Completions, first-party Gemini/Claude transports/connections, request/response metadata propagation, and provider-specific utilities | P0 |
@@ -71,6 +71,9 @@ This matrix uses `adk-python` as the broadest feature baseline and
 - The model layer now has a concrete HTTP transport path.
   Kotlin now includes an OpenAI-compatible Chat Completions HTTP client and
   `LlmTransport` adapter for non-streaming provider calls.
+- App-level event compaction is now wired into runtime persistence.
+  Kotlin now has `EventsCompactionConfig`, `BaseEventsSummarizer`, sliding-window
+  and token-threshold compaction helpers, plus a post-run Runner hook.
 
 ## Highest-Value Next Implementation Order
 
@@ -79,8 +82,9 @@ This matrix uses `adk-python` as the broadest feature baseline and
      are present, but Gemini/Claude first-party transports, streaming, and live
      connections remain the next utility gap.
 2. Event compaction and summarizer integration
-   - The event model and event stream type are present, but official runtime
-     behavior still needs event compaction and summarizer hooks.
+   - App-level compaction config and the post-run hook are present, but
+     first-party LLM summarizer implementations and deeper content filtering
+     parity still need work.
 3. Tool ecosystem modules
    - MCP, OpenAPI, Google Search, Vertex AI Search, retrieval, computer use,
      and long-running function tools are still large user-visible gaps.

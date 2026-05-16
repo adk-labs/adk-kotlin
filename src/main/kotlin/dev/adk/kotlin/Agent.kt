@@ -18,6 +18,8 @@ data class AdkApp(
     val name: String,
     val rootAgent: LlmAgent,
     val globalInstruction: InstructionTemplate? = null,
+    val eventsCompactionConfig: EventsCompactionConfig? = null,
+    val resumabilityConfig: ResumabilityConfig? = null,
 ) {
     init {
         require(name.isNotBlank()) { "App name cannot be blank." }
